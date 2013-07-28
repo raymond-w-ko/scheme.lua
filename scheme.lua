@@ -80,6 +80,62 @@ M.string = {
     end
 }
 
+--------------------------------------------------------------------------------
+-- <identifier> atom
+--------------------------------------------------------------------------------
+M.identifer_mt = {
+    __tostring = function(t)
+        if t.value == nil then
+            M._error('improperly initialized <identifier>')
+        end
+        return t.value
+    end
+}
+
+M.identifier = {
+    letters = {},
+    special_initials = {},
+    special_subsequents = {},
+    digits = {},
+    new = function(value)
+        local t = {}
+        t.type = 'identifier'
+        t.value = value
+        return setmetatable(t, M.identifer_mt)
+    end
+}
+-- letters
+for i = string.byte('a'), string.byte('z') do
+    M.identifier.letters[string.char(i)] = true
+end
+for i = string.byte('A'), string.byte('Z') do
+    M.identifier.letters[string.char(i)] = true
+end
+-- digits
+for i = string.byte('0'), string.byte('9') do
+    M.identifier.digits[string.char(i)] = true
+end
+-- special initials
+M.identifier.special_initials['!'] = true
+M.identifier.special_initials['$'] = true
+M.identifier.special_initials['%'] = true
+M.identifier.special_initials['&'] = true
+M.identifier.special_initials['*'] = true
+M.identifier.special_initials['/'] = true
+M.identifier.special_initials[':'] = true
+M.identifier.special_initials['<'] = true
+M.identifier.special_initials['='] = true
+M.identifier.special_initials['>'] = true
+M.identifier.special_initials['?'] = true
+M.identifier.special_initials['^'] = true
+M.identifier.special_initials['_'] = true
+M.identifier.special_initials['~'] = true
+-- special subsequents
+M.identifier.special_subsequents['+'] = true
+M.identifier.special_subsequents['-'] = true
+M.identifier.special_subsequents['.'] = true
+M.identifier.special_subsequents['@'] = true
+
 local function SearchTillWhitespace(text, begin_index)
     while true do
         if (begin_index + 1) > #text then
@@ -124,9 +180,41 @@ local function SearchTillStringEnd(text, begin_index)
     return table.concat(str, ''), i
 end
 
+local whitespace_chars = {}
+whitespace_chars[' '] = true
+whitespace_chars['\t'] = true
+whitespace_chars['\n'] = true
+whitespace_chars['\r'] = true
+local function IsWhitespace(ch)
+    return whitespace_chars[ch]
+end
+
+local function IsIdentifierInitial(ch)
+    return M.identifier.letters[ch] or M.identifier.special_initials[ch]
+end
+
+local function ExtractIdentifier(text, begin_index)
+    local i = begin_index
+    local name = {}
+    table.insert(name, text:sub(i, i))
+    i = i + 1
+    while i <= #text do
+        local ch = text:sub(i, i)
+        if M.identifier.letters[ch]
+            or M.identifier.special_initials[ch]
+            or M.identifier.special_subsequents[ch]
+            or M.identifier.digits[ch] then
+            table.insert(name, ch)
+        end
+        i = i + 1
+    end
+    return table.concat(name), i
+end
+
 function M.read(text)
     local line_number = 1
-    local datum = {}
+    local master_datum = {}
+    local datum = master_datum
     local i = 1
     local len = #text
 
@@ -134,31 +222,34 @@ function M.read(text)
         local ch = text:sub(i, i)
 
         if ch == '\t' or ch == ' ' or ch == '\r' then
+            -- whitespace
             i = i + 1
         elseif ch == '\n' then
+            -- whitespace
             i = i + 1
             line_number = line_number + 1
         elseif ch == '#' then
+            -- '#' can be followed by a multitude of things
             if i + 1 > len then
                 M._error('expected more input after #')
             end
 
-            -- '#' can be followed by a multitude of things
             local m = text:sub(i + 1, i + 1)
 
-            -- booleans
             if m == 't' then
+                -- boolean true
                 local data = M.boolean.new(true)
                 table.insert(datum, data)
                 i = i + 2
             elseif m == 'f' then
+                -- boolean false
                 local data = M.boolean.new(false)
                 table.insert(datum, data)
                 i = i + 2
             elseif m == '\\' then
                 -- characters
                 if i + 2 > len then
-                    M._error('expected more input after #')
+                    M._error('expected more input after #\\')
                 end
                 local end_index = SearchTillWhitespace(text, i + 2)
                 local character = text:sub(i + 2, end_index)
@@ -173,8 +264,39 @@ function M.read(text)
                 i = end_index + 1
             end
         elseif ch == '"' then
+            -- string
             local str, end_index = SearchTillStringEnd(text, i + 1)
             local data = M.string.new(str)
+            table.insert(datum, data)
+            i = end_index + 1
+        elseif ch == '+' or ch == '-' then
+            -- peculiar identifier '+' and '-'
+            if (i + 1) > #text or IsWhitespace(text:sub(i + 1, i + 1)) then
+                local data = M.identifier.new(ch)
+                table.insert(datum, data)
+                i = i + 1
+            else
+                M._error('whitespace or EOF must follow peculiar identifier: ' .. ch)
+            end
+        elseif ch == '.' then
+            -- peculiar identifier '...'
+            if (i + 2) > #text then
+                M._error('"..." is the only valid identifier with prefix "."')
+            end
+            if text:sub(i, i + 2) ~= '...' then
+                M._error('"..." is the only valid identifier with prefix "."')
+            end
+            if not ((i + 4) > #text) and not IsWhitespace(text:sub(i + 4, i + 4)) then
+                M._error('"..." must be followed by whitespace or EOF')
+            end
+            local data = M.identifier.new('...')
+            table.insert(datum, data)
+            i = i + 4
+        elseif ch == '@' then
+            M._error('identifiers cannot start with "@"')
+        elseif M.identifier.letters[ch] or M.identifier.special_initials[ch] then
+            local identifier, end_index = ExtractIdentifier(text, i)
+            local data = M.identifier.new(identifier)
             table.insert(datum, data)
             i = end_index + 1
         end
