@@ -138,7 +138,9 @@ M.identifier.special_subsequents['-'] = true
 M.identifier.special_subsequents['.'] = true
 M.identifier.special_subsequents['@'] = true
 
+--------------------------------------------------------------------------------
 -- "pair", the basis for a list
+--------------------------------------------------------------------------------
 M.pair_mt = {
     --[[
     __tostring = function(t)
@@ -217,6 +219,31 @@ M.dot = {
         local t = {}
         t.type = 'dot'
         return setmetatable(t, M.dot_mt)
+    end
+}
+
+--------------------------------------------------------------------------------
+-- <vector>
+--------------------------------------------------------------------------------
+M.vector_mt = {
+    __tostring = function(t)
+        local str = {}
+        table.insert(str, '#(')
+        local inner = {}
+        for _, datum in ipairs(t.value) do
+            table.insert(inner, tostring(datum))
+        end
+        table.insert(str, table.concat(inner, ' '))
+        table.insert(str, ')')
+        return table.concat(str)
+    end
+}
+M.vector = {
+    new = function(lua_list)
+        local t = {}
+        t.type = 'vector'
+        t.value = lua_list
+        return setmetatable(t, M.vector_mt)
     end
 }
 
@@ -325,16 +352,50 @@ local function BuildList(lua_list)
     return list
 end
 
+local function DatumInsert(datum, data, prefix_stack)
+    while #prefix_stack > 0 do
+        local prefix = table.remove(prefix_stack)
+        local meta_data = {}
+        local expanded_abbrev
+        if prefix == '\'' then
+            expanded_abbrev = M.identifier.new('quote')
+        elseif prefix == '`' then
+            expanded_abbrev = M.identifier.new('quasiquote')
+        elseif prefix == ',' then
+            expanded_abbrev = M.identifier.new('unquote')
+        elseif prefix == ',@' then
+            expanded_abbrev = M.identifier.new('unquote-splicing')
+        end
+        table.insert(meta_data, expanded_abbrev)
+        table.insert(meta_data, data)
+        data = BuildList(meta_data)
+    end
+    table.insert(datum, data)
+end
+
 function M.read(text)
     local line_number = 1
+
     local master_datum = {}
     local datum = master_datum
     local parent_datum_of = {}
-    local i = 1
-    local len = #text
+
+    -- 0 indicates that parentheses are perfectly balanced,
+    -- >0 mean there are too many '('s
+    -- <0 mean there are too many ')'s
     local paren_balance = 0
 
-    while i <= len do
+    -- when making the next list, it should be a vector instead
+    local is_next_list_a_vector = false
+    local is_vector = {}
+
+    -- ' or ` or , or ,@ was found prior to the beginning of a list
+    -- the next list constructed will use this prefix
+    local prefix_stack = {}
+    local prefix_stack_of_list = {}
+
+    local i = 1
+    while i <= #text do
         local ch = text:sub(i, i)
 
         if ch == '\t' or ch == ' ' or ch == '\r' then
@@ -346,20 +407,20 @@ function M.read(text)
             line_number = line_number + 1
         elseif ch == '#' then
             -- '#' can be followed by a multitude of things
-            if i + 1 > len then
+            if i + 1 > #text then
                 M._error('expected more input after #')
             end
 
             local m = text:sub(i + 1, i + 1)
-
             if m == 't' or m == 'f' then
                 -- boolean true
                 local data = M.boolean.new(m)
-                table.insert(datum, data)
+                DatumInsert(datum, data, prefix_stack)
+                prefix_stack = {}
                 i = i + 2
             elseif m == '\\' then
                 -- characters
-                if i + 2 > len then
+                if i + 2 > #text then
                     M._error('expected more input after #\\')
                 end
                 local end_index = SearchTillWhitespace(text, i + 2)
@@ -371,20 +432,27 @@ function M.read(text)
                 end
                 assert(character)
                 local data = M.character.new(character)
-                table.insert(datum, data)
+                DatumInsert(datum, data, prefix_stack)
+                prefix_stack = {}
                 i = end_index + 1
+            elseif m == '(' then
+                -- prefix to make next 'list' a 'vector'
+                is_next_list_a_vector = true
+                i = i + 1
             end
         elseif ch == '"' then
             -- string
             local str, end_index = SearchTillStringEnd(text, i + 1)
             local data = M.string.new(str)
-            table.insert(datum, data)
+            DatumInsert(datum, data, prefix_stack)
+            prefix_stack = {}
             i = end_index + 1
         elseif ch == '+' or ch == '-' then
             -- peculiar identifier '+' and '-'
             if (i + 1) > #text or IsWhitespace(text:sub(i + 1, i + 1)) then
                 local data = M.identifier.new(ch)
-                table.insert(datum, data)
+                DatumInsert(datum, data, prefix_stack)
+                prefix_stack = {}
                 i = i + 1
             else
                 M._error('whitespace or EOF must follow peculiar identifier: ' .. ch)
@@ -392,6 +460,9 @@ function M.read(text)
         elseif ch == '.' then
             -- dot notation for Scheme pairs
             if IsWhitespace(text:sub(i + 1, i + 1)) then
+                if is_vector[datum] then
+                    M._error('dot operator meaningless in vector')
+                end
                 local data = M.dot.new()
                 table.insert(datum, data)
                 i = i + 1
@@ -408,6 +479,8 @@ function M.read(text)
                 end
                 local data = M.identifier.new('...')
                 table.insert(datum, data)
+                DatumInsert(datum, data, prefix_stack)
+                prefix_stack = {}
                 i = i + 4
             end
         elseif ch == '@' then
@@ -415,12 +488,39 @@ function M.read(text)
         elseif M.identifier.letters[ch] or M.identifier.special_initials[ch] then
             local identifier, end_index = ExtractIdentifier(text, i)
             local data = M.identifier.new(identifier)
-            table.insert(datum, data)
+            DatumInsert(datum, data, prefix_stack)
+            prefix_stack = {}
             i = end_index + 1
+        elseif ch == '\'' or ch == '`' or ch == ',' then
+            if (i + 1) > #text then
+                M._error('expected more input after ' .. ch)
+            end
+            local m = text:sub(i + 1, i + 1)
+            local prefix
+            if ch == ',' and m == '@' then
+                if (i + 2) > #text then
+                    M._error('expected more input after ,@')
+                end
+                prefix = ',@'
+                i = i + 2
+            else
+                prefix = ch
+                i = i + 1
+            end
+            table.insert(prefix_stack, prefix)
         elseif ch == '(' then
             local new_datum = {}
             parent_datum_of[new_datum] = datum
             datum = new_datum
+
+            -- check to see if this should be a vector instead
+            is_vector[datum] = is_next_list_a_vector
+            is_next_list_a_vector = false
+
+            -- consume prefix_stack
+            prefix_stack_of_list[datum] = prefix_stack
+            prefix_stack = {}
+
             i = i + 1
             paren_balance = paren_balance + 1
         elseif ch == ')' then
@@ -428,8 +528,20 @@ function M.read(text)
                 M._error('one or more ")" detected')
             end
             local prelist = datum
+            -- restore previous datum
             datum = parent_datum_of[datum]
-            table.insert(datum, BuildList(prelist))
+
+            -- decide whether to build a vector or a list
+            if is_vector[prelist] then
+                is_vector[prelist] = nil
+                local scheme_vector = M.vector.new(prelist)
+                DatumInsert(datum, scheme_vector, prefix_stack_of_list[prelist])
+                prefix_stack_of_list[prelist] = nil
+            else
+                local scheme_list = BuildList(prelist)
+                DatumInsert(datum, scheme_list, prefix_stack_of_list[prelist])
+                prefix_stack_of_list[prelist] = nil
+            end
             i = i + 1
 
             paren_balance = paren_balance - 1
