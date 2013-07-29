@@ -389,9 +389,11 @@ function M.read(text)
     local is_next_list_a_vector = false
     local is_vector = {}
 
-    -- ' or ` or , or ,@ was found prior to the beginning of a list
-    -- the next list constructed will use this prefix
+    -- ' or ` or , or ,@ was found, and the next datum will consume all of the
+    -- prefixes in the stack, expanding to the unabbreviated prefix
     local prefix_stack = {}
+    -- since we are aren't recursively parsing, this map is used to indicate
+    -- the prefixes that a list or vector has consumed
     local prefix_stack_of_list = {}
 
     local i = 1
