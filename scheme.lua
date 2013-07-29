@@ -33,7 +33,9 @@ M.boolean = {
     new = function(value)
         local t = {}
         t.type = 'boolean'
-        t.value = value
+        if value == 't' then t.value = true
+        elseif value == 'f' then t.value = false
+        end
         return setmetatable(t, M.boolean_mt)
     end
 }
@@ -136,6 +138,88 @@ M.identifier.special_subsequents['-'] = true
 M.identifier.special_subsequents['.'] = true
 M.identifier.special_subsequents['@'] = true
 
+-- "pair", the basis for a list
+M.pair_mt = {
+    --[[
+    __tostring = function(t)
+        if t:empty() then
+            return '()'
+        end
+
+        local str = {}
+        table.insert(str, '(')
+        if t.car then
+            table.insert(str, tostring(t.car))
+        end
+        table.insert(str, ' . ')
+        if t.cdr then
+            table.insert(str, tostring(t.cdr))
+        else
+            table.insert(str, '()')
+        end
+        table.insert(str, ')')
+        return table.concat(str)
+    end
+    --]]
+    __tostring = function(t)
+        if t:empty() then
+            return '()'
+        end
+
+        local str = {}
+        table.insert(str, '(')
+        local pair = t
+
+        local inner = {}
+        while true do
+            table.insert(inner, tostring(pair.car))
+            if pair.cdr.type ~= 'pair' then
+                table.insert(inner, '.')
+                table.insert(inner, tostring(pair.cdr))
+                break
+            else
+                if pair.cdr:empty() then
+                    break
+                end
+                pair = pair.cdr
+            end
+        end
+        inner = table.concat(inner, ' ')
+        table.insert(str, inner)
+
+        table.insert(str, ')')
+        return table.concat(str)
+    end
+}
+M.pair = {
+    empty = function(t)
+        return t.car == nil and t.cdr == nil
+    end
+    ,
+    new = function(car, cdr)
+        local t = {}
+        t.type = 'pair'
+        t.car = car
+        t.cdr = cdr
+        return setmetatable(t, M.pair_mt)
+    end
+}
+M.pair_mt.__index = M.pair
+
+-- dot operator for pairs
+M.dot_mt = {
+    __tostring = function(t)
+        return '__DOT__'
+    end
+}
+M.dot = {
+    new = function()
+        local t = {}
+        t.type = 'dot'
+        return setmetatable(t, M.dot_mt)
+    end
+}
+
 local function SearchTillWhitespace(text, begin_index)
     while true do
         if (begin_index + 1) > #text then
@@ -205,18 +289,50 @@ local function ExtractIdentifier(text, begin_index)
             or M.identifier.special_subsequents[ch]
             or M.identifier.digits[ch] then
             table.insert(name, ch)
+        else
+            break
         end
         i = i + 1
     end
-    return table.concat(name), i
+    return table.concat(name), i - 1
+end
+
+local function BuildList(lua_list)
+    local list = M.pair.new(nil, nil)
+    local previous_pair = nil
+    local current_pair = list
+    local found_dot = false
+    for i = 1, #lua_list do
+        local datum = lua_list[i]
+        if datum.type == 'dot' then
+            found_dot = true
+        else
+            if found_dot then
+                previous_pair.cdr = datum
+                if i ~= #lua_list then
+                    M._error('more <datum> found after dot in list')
+                end
+
+                break
+            else
+                current_pair.car = datum
+                current_pair.cdr = M.pair.new(nil, nil)
+                previous_pair = current_pair
+                current_pair = current_pair.cdr
+            end
+        end
+    end
+    return list
 end
 
 function M.read(text)
     local line_number = 1
     local master_datum = {}
     local datum = master_datum
+    local parent_datum_of = {}
     local i = 1
     local len = #text
+    local paren_balance = 0
 
     while i <= len do
         local ch = text:sub(i, i)
@@ -236,14 +352,9 @@ function M.read(text)
 
             local m = text:sub(i + 1, i + 1)
 
-            if m == 't' then
+            if m == 't' or m == 'f' then
                 -- boolean true
-                local data = M.boolean.new(true)
-                table.insert(datum, data)
-                i = i + 2
-            elseif m == 'f' then
-                -- boolean false
-                local data = M.boolean.new(false)
+                local data = M.boolean.new(m)
                 table.insert(datum, data)
                 i = i + 2
             elseif m == '\\' then
@@ -279,19 +390,26 @@ function M.read(text)
                 M._error('whitespace or EOF must follow peculiar identifier: ' .. ch)
             end
         elseif ch == '.' then
-            -- peculiar identifier '...'
-            if (i + 2) > #text then
-                M._error('"..." is the only valid identifier with prefix "."')
+            -- dot notation for Scheme pairs
+            if IsWhitespace(text:sub(i + 1, i + 1)) then
+                local data = M.dot.new()
+                table.insert(datum, data)
+                i = i + 1
+            else
+                -- peculiar identifier '...'
+                if (i + 2) > #text then
+                    M._error('"..." is the only valid identifier with prefix "."')
+                end
+                if text:sub(i, i + 2) ~= '...' then
+                    M._error('"..." is the only valid identifier with prefix "."')
+                end
+                if not ((i + 4) > #text) and not IsWhitespace(text:sub(i + 4, i + 4)) then
+                    M._error('"..." must be followed by whitespace or EOF')
+                end
+                local data = M.identifier.new('...')
+                table.insert(datum, data)
+                i = i + 4
             end
-            if text:sub(i, i + 2) ~= '...' then
-                M._error('"..." is the only valid identifier with prefix "."')
-            end
-            if not ((i + 4) > #text) and not IsWhitespace(text:sub(i + 4, i + 4)) then
-                M._error('"..." must be followed by whitespace or EOF')
-            end
-            local data = M.identifier.new('...')
-            table.insert(datum, data)
-            i = i + 4
         elseif ch == '@' then
             M._error('identifiers cannot start with "@"')
         elseif M.identifier.letters[ch] or M.identifier.special_initials[ch] then
@@ -299,7 +417,30 @@ function M.read(text)
             local data = M.identifier.new(identifier)
             table.insert(datum, data)
             i = end_index + 1
+        elseif ch == '(' then
+            local new_datum = {}
+            parent_datum_of[new_datum] = datum
+            datum = new_datum
+            i = i + 1
+            paren_balance = paren_balance + 1
+        elseif ch == ')' then
+            if paren_balance <= 0 then
+                M._error('one or more ")" detected')
+            end
+            local prelist = datum
+            datum = parent_datum_of[datum]
+            table.insert(datum, BuildList(prelist))
+            i = i + 1
+
+            paren_balance = paren_balance - 1
+        else
+            print(tostring(ch))
+            assert(false)
         end
+    end
+
+    if paren_balance ~= 0 then
+        M._error('unclosed "(" detected')
     end
 
     return datum

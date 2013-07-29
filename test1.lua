@@ -96,8 +96,22 @@ function identifier_test()
     --datum_print(datum)
 end
 
+function list_test()
+    datum_print(scheme.read('()'))
+    datum_print(scheme.read('(#t)'))
+    datum_print(scheme.read('(v)'))
+    datum_print(scheme.read('(var)'))
+    datum_print(scheme.read('(var1 var2 var3)'))
+    datum_print(scheme.read('(var0 () (var1) (var2 var3) var3)'))
+    datum_print(scheme.read('(var1 . var2)'))
+    datum_print(scheme.read('((var0 . var1) (var2 . var3))'))
+    datum_print(scheme.read('((var0 (()) (var1) (((var2) var3)) var3))'))
+    --datum_print(scheme.read('(var0 . var1 . var2)'))
+end
+
 boolean_test()
 character_test()
 string_test()
 special_identifier_test()
 identifier_test()
+list_test()
