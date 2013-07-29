@@ -58,7 +58,7 @@ function string_test()
     datum_print(datum)
 end
 
-function special_identifier_test()
+function special_symbol_test()
     datum = scheme.read('+')
     datum_print(datum)
     datum = scheme.read('+ ')
@@ -75,7 +75,7 @@ function special_identifier_test()
     datum_print(datum)
 end
 
-function identifier_test()
+function symbol_test()
     datum = scheme.read('asdf')
     datum_print(datum)
     datum = scheme.read('boolean?')
@@ -164,8 +164,8 @@ end
 boolean_test()
 character_test()
 string_test()
-special_identifier_test()
-identifier_test()
+special_symbol_test()
+symbol_test()
 list_test()
 vector_test()
 abbreviation_prefix_test()

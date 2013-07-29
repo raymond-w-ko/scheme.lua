@@ -83,60 +83,60 @@ M.string = {
 }
 
 --------------------------------------------------------------------------------
--- <identifier> atom
+-- <symbol> atom
 --------------------------------------------------------------------------------
 M.identifer_mt = {
     __tostring = function(t)
         if t.value == nil then
-            M._error('improperly initialized <identifier>')
+            M._error('improperly initialized <symbol>')
         end
         return t.value
     end
 }
 
-M.identifier = {
+M.symbol = {
     letters = {},
     special_initials = {},
     special_subsequents = {},
     digits = {},
     new = function(value)
         local t = {}
-        t.type = 'identifier'
+        t.type = 'symbol'
         t.value = value
         return setmetatable(t, M.identifer_mt)
     end
 }
 -- letters
 for i = string.byte('a'), string.byte('z') do
-    M.identifier.letters[string.char(i)] = true
+    M.symbol.letters[string.char(i)] = true
 end
 for i = string.byte('A'), string.byte('Z') do
-    M.identifier.letters[string.char(i)] = true
+    M.symbol.letters[string.char(i)] = true
 end
 -- digits
 for i = string.byte('0'), string.byte('9') do
-    M.identifier.digits[string.char(i)] = true
+    M.symbol.digits[string.char(i)] = true
 end
 -- special initials
-M.identifier.special_initials['!'] = true
-M.identifier.special_initials['$'] = true
-M.identifier.special_initials['%'] = true
-M.identifier.special_initials['&'] = true
-M.identifier.special_initials['*'] = true
-M.identifier.special_initials['/'] = true
-M.identifier.special_initials[':'] = true
-M.identifier.special_initials['<'] = true
-M.identifier.special_initials['='] = true
-M.identifier.special_initials['>'] = true
-M.identifier.special_initials['?'] = true
-M.identifier.special_initials['^'] = true
-M.identifier.special_initials['_'] = true
-M.identifier.special_initials['~'] = true
+M.symbol.special_initials['!'] = true
+M.symbol.special_initials['$'] = true
+M.symbol.special_initials['%'] = true
+M.symbol.special_initials['&'] = true
+M.symbol.special_initials['*'] = true
+M.symbol.special_initials['/'] = true
+M.symbol.special_initials[':'] = true
+M.symbol.special_initials['<'] = true
+M.symbol.special_initials['='] = true
+M.symbol.special_initials['>'] = true
+M.symbol.special_initials['?'] = true
+M.symbol.special_initials['^'] = true
+M.symbol.special_initials['_'] = true
+M.symbol.special_initials['~'] = true
 -- special subsequents
-M.identifier.special_subsequents['+'] = true
-M.identifier.special_subsequents['-'] = true
-M.identifier.special_subsequents['.'] = true
-M.identifier.special_subsequents['@'] = true
+M.symbol.special_subsequents['+'] = true
+M.symbol.special_subsequents['-'] = true
+M.symbol.special_subsequents['.'] = true
+M.symbol.special_subsequents['@'] = true
 
 --------------------------------------------------------------------------------
 -- "pair", the basis for a list
@@ -328,21 +328,21 @@ local function IsWhitespace(ch)
     return whitespace_chars[ch]
 end
 
-local function IsIdentifierInitial(ch)
-    return M.identifier.letters[ch] or M.identifier.special_initials[ch]
+local function IsSymbolInitial(ch)
+    return M.symbol.letters[ch] or M.symbol.special_initials[ch]
 end
 
-local function ExtractIdentifier(text, begin_index)
+local function ExtractSymbol(text, begin_index)
     local i = begin_index
     local name = {}
     table.insert(name, text:sub(i, i))
     i = i + 1
     while i <= #text do
         local ch = text:sub(i, i)
-        if M.identifier.letters[ch]
-            or M.identifier.special_initials[ch]
-            or M.identifier.special_subsequents[ch]
-            or M.identifier.digits[ch] then
+        if M.symbol.letters[ch]
+            or M.symbol.special_initials[ch]
+            or M.symbol.special_subsequents[ch]
+            or M.symbol.digits[ch] then
             table.insert(name, ch)
         else
             break
@@ -386,13 +386,13 @@ local function DatumInsert(datum, data, prefix_stack)
         local meta_data = {}
         local expanded_abbrev
         if prefix == '\'' then
-            expanded_abbrev = M.identifier.new('quote')
+            expanded_abbrev = M.symbol.new('quote')
         elseif prefix == '`' then
-            expanded_abbrev = M.identifier.new('quasiquote')
+            expanded_abbrev = M.symbol.new('quasiquote')
         elseif prefix == ',' then
-            expanded_abbrev = M.identifier.new('unquote')
+            expanded_abbrev = M.symbol.new('unquote')
         elseif prefix == ',@' then
-            expanded_abbrev = M.identifier.new('unquote-splicing')
+            expanded_abbrev = M.symbol.new('unquote-splicing')
         end
         table.insert(meta_data, expanded_abbrev)
         table.insert(meta_data, data)
@@ -517,9 +517,9 @@ function M.read(text)
             prefix_stack = {}
             i = end_index + 1
         elseif ch == '+' or ch == '-' then
-            -- peculiar identifier '+' and '-'
+            -- peculiar symbol '+' and '-'
             if (i + 1) > #text or IsWhitespace(text:sub(i + 1, i + 1)) then
-                local data = M.identifier.new(ch)
+                local data = M.symbol.new(ch)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 1
@@ -529,7 +529,7 @@ function M.read(text)
                 DatumInsert(datum, data, prefix_stack)
                 i = end_index + 1
             else
-                M._error('whitespace, EOF, or decimal digits must follow peculiar identifier: ' .. ch)
+                M._error('whitespace, EOF, or decimal digits must follow peculiar symbol: ' .. ch)
             end
         elseif M.number.decimal_digits[ch] then
             local number, end_index = ParseSchemeNumber(text, i)
@@ -546,27 +546,27 @@ function M.read(text)
                 table.insert(datum, data)
                 i = i + 1
             else
-                -- peculiar identifier '...'
+                -- peculiar symbol '...'
                 if (i + 2) > #text then
-                    M._error('"..." is the only valid identifier with prefix "."')
+                    M._error('"..." is the only valid symbol with prefix "."')
                 end
                 if text:sub(i, i + 2) ~= '...' then
-                    M._error('"..." is the only valid identifier with prefix "."')
+                    M._error('"..." is the only valid symbol with prefix "."')
                 end
                 if not ((i + 4) > #text) and not IsWhitespace(text:sub(i + 4, i + 4)) then
                     M._error('"..." must be followed by whitespace or EOF')
                 end
-                local data = M.identifier.new('...')
+                local data = M.symbol.new('...')
                 table.insert(datum, data)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 4
             end
         elseif ch == '@' then
-            M._error('identifiers cannot start with "@"')
-        elseif M.identifier.letters[ch] or M.identifier.special_initials[ch] then
-            local identifier, end_index = ExtractIdentifier(text, i)
-            local data = M.identifier.new(identifier)
+            M._error('symbols cannot start with "@"')
+        elseif M.symbol.letters[ch] or M.symbol.special_initials[ch] then
+            local symbol, end_index = ExtractSymbol(text, i)
+            local data = M.symbol.new(symbol)
             DatumInsert(datum, data, prefix_stack)
             prefix_stack = {}
             i = end_index + 1
