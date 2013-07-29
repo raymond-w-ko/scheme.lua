@@ -246,6 +246,34 @@ M.vector = {
         return setmetatable(t, M.vector_mt)
     end
 }
+--------------------------------------------------------------------------------
+-- <number>
+--------------------------------------------------------------------------------
+M.number_mt = {
+    __tostring = function(t)
+        return tostring(t.value)
+    end
+}
+M.number = {
+    decimal_digits = {}
+    ,
+    new = function(num)
+        local t = {}
+        t.type = 'number'
+        t.value = num
+        return setmetatable(t, M.number_mt)
+    end
+}
+M.number.decimal_digits['0'] = true
+M.number.decimal_digits['1'] = true
+M.number.decimal_digits['2'] = true
+M.number.decimal_digits['3'] = true
+M.number.decimal_digits['4'] = true
+M.number.decimal_digits['5'] = true
+M.number.decimal_digits['6'] = true
+M.number.decimal_digits['7'] = true
+M.number.decimal_digits['8'] = true
+M.number.decimal_digits['9'] = true
 
 local function SearchTillWhitespace(text, begin_index)
     while true do
@@ -373,7 +401,42 @@ local function DatumInsert(datum, data, prefix_stack)
     table.insert(datum, data)
 end
 
+local function ParseSchemeNumber(text, i)
+    local end_index = SearchTillWhitespace(text, i)
+    local number_string = text:sub(i, end_index)
+    -- TODO: determine if this can be used
+    local exactness = false
+    local base = 10
+    while number_string:sub(1, 1) == '#' do
+        local prefix = number_string:sub(2, 2)
+        assert(prefix)
+        if prefix == 'i' then exactness = false
+        elseif prefix == 'e' then exactness = true
+        elseif prefix == 'b' then base = 2
+        elseif prefix == 'o' then base = 8
+        elseif prefix == 'd' then base = 10
+        elseif prefix == 'x' then base = 16
+        end
+        number_string = number_string:sub(3)
+    end
+
+    local num = tonumber(number_string, base)
+    if num == nil then
+        M._error('failed to parse ' .. number_string .. ' as base ' .. base)
+    end
+
+    return num, end_index
+end
+
 function M.read(text)
+    local k_number_prefixes = {}
+    k_number_prefixes['i'] = true
+    k_number_prefixes['e'] = true
+    k_number_prefixes['b'] = true
+    k_number_prefixes['o'] = true
+    k_number_prefixes['d'] = true
+    k_number_prefixes['x'] = true
+
     local line_number = 1
 
     local master_datum = {}
@@ -420,6 +483,11 @@ function M.read(text)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 2
+            elseif k_number_prefixes[m] then
+                local number, end_index = ParseSchemeNumber(text, i)
+                local data = M.number.new(number)
+                DatumInsert(datum, data, prefix_stack)
+                i = end_index + 1
             elseif m == '\\' then
                 -- characters
                 if i + 2 > #text then
@@ -432,7 +500,6 @@ function M.read(text)
                 elseif character:lower() == 'newline' then
                     character = '\n'
                 end
-                assert(character)
                 local data = M.character.new(character)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
@@ -456,9 +523,19 @@ function M.read(text)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 1
+            elseif (i + 1) <= #text and M.number.decimal_digits[text:sub(i + 1, i + 1)] then
+                local number, end_index = ParseSchemeNumber(text, i)
+                local data = M.number.new(number)
+                DatumInsert(datum, data, prefix_stack)
+                i = end_index + 1
             else
-                M._error('whitespace or EOF must follow peculiar identifier: ' .. ch)
+                M._error('whitespace, EOF, or decimal digits must follow peculiar identifier: ' .. ch)
             end
+        elseif M.number.decimal_digits[ch] then
+            local number, end_index = ParseSchemeNumber(text, i)
+            local data = M.number.new(number)
+            DatumInsert(datum, data, prefix_stack)
+            i = end_index + 1
         elseif ch == '.' then
             -- dot notation for Scheme pairs
             if IsWhitespace(text:sub(i + 1, i + 1)) then

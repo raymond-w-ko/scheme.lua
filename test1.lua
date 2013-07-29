@@ -149,6 +149,18 @@ function abbreviation_prefix_test()
     --datum_print(scheme.read(","))
 end
 
+function number_test()
+    datum_print(scheme.read('#b1001'))
+    datum_print(scheme.read('9001'))
+    datum_print(scheme.read('1'))
+    datum_print(scheme.read('2343412341'))
+    datum_print(scheme.read('+1'))
+    datum_print(scheme.read('-1'))
+    datum_print(scheme.read('+3.14159'))
+    datum_print(scheme.read('-2.99999'))
+    datum_print(scheme.read('-2.99999e10'))
+end
+
 boolean_test()
 character_test()
 string_test()
@@ -157,3 +169,4 @@ identifier_test()
 list_test()
 vector_test()
 abbreviation_prefix_test()
+number_test()
