@@ -77,6 +77,8 @@ function M.string.new(value)
     return setmetatable(t, M.string_mt)
 end
 
+M.unspecified_value = M.string.new('unspecified')
+
 --------------------------------------------------------------------------------
 -- <symbol> atom
 --------------------------------------------------------------------------------
@@ -153,6 +155,37 @@ M.number.decimal_digits['7'] = true
 M.number.decimal_digits['8'] = true
 M.number.decimal_digits['9'] = true
 
+M.number.other_valid_characters = {}
+M.number.other_valid_characters['+'] = true
+M.number.other_valid_characters['-'] = true
+M.number.other_valid_characters['/'] = true
+M.number.other_valid_characters['i'] = true
+M.number.other_valid_characters['@'] = true
+M.number.other_valid_characters['.'] = true
+
+M.number.other_valid_characters['e'] = true
+M.number.other_valid_characters['s'] = true
+M.number.other_valid_characters['d'] = true
+M.number.other_valid_characters['f'] = true
+M.number.other_valid_characters['l'] = true
+
+M.number.other_valid_characters['#'] = true
+M.number.other_valid_characters['i'] = true
+M.number.other_valid_characters['#'] = true
+M.number.other_valid_characters['e'] = true
+
+M.number.other_valid_characters['b'] = true
+M.number.other_valid_characters['o'] = true
+M.number.other_valid_characters['d'] = true
+M.number.other_valid_characters['x'] = true
+
+M.number.other_valid_characters['a'] = true
+M.number.other_valid_characters['b'] = true
+M.number.other_valid_characters['c'] = true
+M.number.other_valid_characters['d'] = true
+M.number.other_valid_characters['e'] = true
+M.number.other_valid_characters['f'] = true
+
 function M.number.new(num)
     local t = {}
     t.type = 'number'
@@ -163,7 +196,7 @@ end
 --------------------------------------------------------------------------------
 -- "pair", the basis for a list
 --------------------------------------------------------------------------------
-M.pair_mt = { }
+M.pair_mt = {}
 M.pair = {}
 M.pair_mt.__index = M.pair
 
@@ -228,7 +261,7 @@ end
 --------------------------------------------------------------------------------
 -- <vector>
 --------------------------------------------------------------------------------
-M.vector_mt = { }
+M.vector_mt = {}
 function M.vector_mt.__tostring(t)
     local str = {}
     table.insert(str, '#(')
@@ -250,8 +283,34 @@ function M.vector.new(lua_list)
 end
 
 --------------------------------------------------------------------------------
--- <compound proc> atom
+-- <compound_proc> atom
 --------------------------------------------------------------------------------
+M.compound_proc_mt = {}
+function M.compound_proc_mt.__tostring(t)
+    local str = {}
+    table.insert(str, '(lambda (')
+
+    local formals = {}
+    local pair = t.formals
+    while pair.car do
+        table.insert(formals, tostring(pair.car.value))
+        pair = pair.cdr
+    end
+    table.insert(str, table.concat(formals, ' '))
+
+    table.insert(str, ') <body>)')
+    return table.concat(str)
+end
+
+M.compound_proc = {}
+function M.compound_proc.new(formals, body, env)
+    local t = {}
+    t.type = 'compound_proc'
+    t.formals = formals
+    t.body = body
+    t.env = env
+    return setmetatable(t, M.compound_proc_mt)
+end
 
 --------------------------------------------------------------------------------
 -- environment
@@ -267,13 +326,48 @@ end
 -- capitalize
 --------------------------------------------------------------------------------
 M.Environment_mt = {}
+function M.Environment_mt.lookup_symbol(t, symbol)
+    if t.vars[symbol.value] ~= nil then
+        return t.vars[symbol.value]
+    elseif t.previous_env ~= nil then
+        return M.Environment_mt.lookup_symbol(t.previous_env, symbol.value)
+    else
+        M._error('unbound symbol: ' .. symbol.value)
+    end
+end
+
+function M.Environment_mt.define_symbol(t, symbol, value)
+    if t.vars[symbol.value] ~= nil and t.previous_env ~= nil then
+        M._error('symbol already bound in a non top level environment: ' .. symbol.name)
+    else
+        t.vars[symbol.value] = value
+        return M.unspecified_value
+    end
+end
+
+function M.Environment_mt.set_symbol(t, symbol, value)
+    if t.vars[symbol.value] == nil and t.previous_env ~= nil then
+        if t.previous_env then
+            return M.Environment_mt.set_symbol(t.previous_env, symbol, value)
+        else
+            M._error('set! could not find bound symbol: ' .. symbol.value)
+        end
+    end
+
+    t.vars[symbol.value] = value
+    return M.unspecified_value
+end
 
 M.Environment = {}
 function M.Environment.new(previous_env)
     local t = {}
     t.previous_env = previous_env
-    return setmetatable(t, M.Environment_mt)
+    t.vars = {}
+    return setmetatable(t, {__index = M.Environment_mt})
 end
+
+-- the default outermost environment containing core functions and etc.
+M.global_environment = M.Environment.new(nil)
 
 --------------------------------------------------------------------------------
 -- read
@@ -289,6 +383,20 @@ local function SearchTillWhitespace(text, begin_index)
         end
         if ch == ' ' then
             return begin_index + 1
+        end
+        begin_index = begin_index + 1
+    end
+end
+
+function SearchTillNumberEnd(text, begin_index)
+    while true do
+        if (begin_index + 1) > #text then
+            return begin_index
+        end
+        local ch = text:sub(begin_index + 1, begin_index + 1)
+        if not M.number.decimal_digits[ch]
+            and not M.number.other_valid_characters[ch] then
+            return begin_index
         end
         begin_index = begin_index + 1
     end
@@ -405,7 +513,7 @@ local function DatumInsert(datum, data, prefix_stack)
 end
 
 local function ParseSchemeNumber(text, i)
-    local end_index = SearchTillWhitespace(text, i)
+    local end_index = SearchTillNumberEnd(text, i)
     local number_string = text:sub(i, end_index)
     -- TODO: determine if this can be used
     local exactness = false
@@ -496,6 +604,8 @@ function M.read(text)
                 if i + 2 > #text then
                     M._error('expected more input after #\\')
                 end
+                -- TODO: doesn't work in all cases, like where a paren follows,
+                -- need to revise to be more robost
                 local end_index = SearchTillWhitespace(text, i + 2)
                 local character = text:sub(i + 2, end_index)
                 if character:lower() == 'space' then
@@ -649,6 +759,7 @@ end
 -- and
 -- https://github.com/petermichaux/bootstrap-scheme/blob/v0.21/scheme.c
 --------------------------------------------------------------------------------
+
 local self_evaluating_types = {}
 self_evaluating_types['boolean'] = true
 self_evaluating_types['character'] = true
@@ -663,13 +774,71 @@ function M.is_variable(expr)
 end
 
 function M.lookup_variable_value(expr, env)
+    return env:lookup_symbol(expr)
 end
 
+function M.is_symbol_named(expr, name)
+    if expr.type == 'pair' and expr.car and expr.car.type == 'symbol' then
+        if expr.car.value == name then
+            return true
+        end
+    end
+
+    return false
+end
+
+function M.is_quoted(expr) return M.is_symbol_named(expr, 'quote') end
+function M.is_assignment(expr) return M.is_symbol_named(expr, 'set!') end
+function M.is_definition(expr) return M.is_symbol_named(expr, 'define') end
+function M.is_if(expr) return M.is_symbol_named(expr, 'if') end
+function M.is_lambda(expr) return M.is_symbol_named(expr, 'lambda') end
+
 function M.eval(expr, env, proc, arguments, result)
+    assert(expr)
+    assert(env)
+
     if M.is_self_evaluating(expr) then
         return expr
     elseif M.is_variable(expr) then
         return M.lookup_variable_value(expr, env)
+    elseif M.is_quoted(expr) then
+        return expr.cdr.car
+    elseif M.is_assignment(expr) then
+        local symbol = expr.cdr.car
+        local value = M.eval(expr.cdr.cdr.car, env)
+        return env:set_symbol(symbol, value)
+    elseif M.is_definition(expr) then
+        local arg0 = expr.cdr.car
+        local arg1 = expr.cdr.cdr.car
+        if arg0.type == 'symbol' then
+            return env:define_symbol(arg0, M.eval(arg1, env))
+        elseif symbol.type == 'pair' then
+            -- TODO (define ...) for functions
+        end
+    elseif M.is_if(expr) then
+        local test = expr.cdr.car
+        local consequent = expr.cdr.cdr.car
+        local alternate = nil
+        if not expr.cdr.cdr.cdr:empty() then
+            alternate = expr.cdr.cdr.cdr.car
+        end
+
+        local result = M.eval(test, env)
+        if result.type == 'boolean' and result.value == false then
+            if alternate then
+                return M.eval(alternate, env)
+            else
+                return M.unspecified_value
+            end
+        else
+            return M.eval(consequent, env)
+        end
+    elseif M.is_lambda(expr) then
+        local formals = expr.cdr.car
+        local body = expr.cdr.cdr.car
+        return M.compound_proc.new(formals, body, env)
+    else
+        M._error('unable to eval expr of type: ' .. expr.type)
     end
 end
 
