@@ -18,95 +18,79 @@ end
 --------------------------------------------------------------------------------
 -- <boolean> atom
 --------------------------------------------------------------------------------
-M.boolean_mt = {
-    __tostring = function(t)
-        if t.value == true then
-            return '#t'
-        elseif t.value == false then
-            return '#f'
-        else
-            M._error('improperly initialized <boolean>')
-        end
+M.boolean_mt = {}
+function  M.boolean_mt.__tostring(t)
+    if t.value == true then
+        return '#t'
+    elseif t.value == false then
+        return '#f'
+    else
+        M._error('improperly initialized <boolean>')
     end
-}
-M.boolean = {
-    new = function(value)
-        local t = {}
-        t.type = 'boolean'
-        if value == 't' then t.value = true
-        elseif value == 'f' then t.value = false
-        end
-        return setmetatable(t, M.boolean_mt)
+end
+
+M.boolean = {}
+function M.boolean.new(value)
+    local t = {}
+    t.type = 'boolean'
+    if value == 't' then t.value = true
+    elseif value == 'f' then t.value = false
     end
-}
+    return setmetatable(t, M.boolean_mt)
+end
 
 --------------------------------------------------------------------------------
 -- <character> atom
 --------------------------------------------------------------------------------
-M.character_mt = {
-    __tostring = function(t)
-        if t.value == nil then
-            M._error('improperly initialized <character>')
-        end
-        return '#\\' .. t.value
+M.character_mt = {}
+function M.character_mt.__tostring(t)
+    if t.value == nil then
+        M._error('improperly initialized <character>')
     end
-}
+    return '#\\' .. t.value
+end
 
-M.character = {
-    new = function(value)
-        local t = {}
-        t.type = 'character'
-        t.value = value
-        return setmetatable(t, M.character_mt)
-    end
-}
+M.character = {}
+function M.character.new(value)
+    local t = {}
+    t.type = 'character'
+    t.value = value
+    return setmetatable(t, M.character_mt)
+end
 
 --------------------------------------------------------------------------------
 -- <string> atom
 --------------------------------------------------------------------------------
-M.string_mt = {
-    __tostring = function(t)
-        if t.value == nil then
-            M._error('improperly initialized <string>')
-        end
-        return '"' .. t.value .. '"'
+M.string_mt = {}
+function M.string_mt.__tostring(t)
+    if t.value == nil then
+        M._error('improperly initialized <string>')
     end
-}
+    return '"' .. t.value .. '"'
+end
 
-M.string = {
-    new = function(value)
-        local t = {}
-        t.type = 'string'
-        t.value = value
-        return setmetatable(t, M.string_mt)
-    end
-}
+M.string = {}
+function M.string.new(value)
+    local t = {}
+    t.type = 'string'
+    t.value = value
+    return setmetatable(t, M.string_mt)
+end
 
 --------------------------------------------------------------------------------
 -- <symbol> atom
 --------------------------------------------------------------------------------
-M.identifer_mt = {
-    __tostring = function(t)
-        if t.value == nil then
-            M._error('improperly initialized <symbol>')
-        end
-        return t.value
+M.symbol_mt = {}
+function M.symbol_mt.__tostring(t)
+    if t.value == nil then
+        M._error('improperly initialized <symbol>')
     end
-}
+    return t.value
+end
 
-M.symbol = {
-    letters = {},
-    special_initials = {},
-    special_subsequents = {},
-    digits = {},
-    new = function(value)
-        local t = {}
-        t.type = 'symbol'
-        t.value = value
-        return setmetatable(t, M.identifer_mt)
-    end
-}
+M.symbol = {}
 -- letters
+M.symbol.letters = {}
 for i = string.byte('a'), string.byte('z') do
     M.symbol.letters[string.char(i)] = true
 end
@@ -114,10 +98,12 @@ for i = string.byte('A'), string.byte('Z') do
     M.symbol.letters[string.char(i)] = true
 end
 -- digits
+M.symbol.digits = {}
 for i = string.byte('0'), string.byte('9') do
     M.symbol.digits[string.char(i)] = true
 end
 -- special initials
+M.symbol.special_initials = {}
 M.symbol.special_initials['!'] = true
 M.symbol.special_initials['$'] = true
 M.symbol.special_initials['%'] = true
@@ -133,137 +119,29 @@ M.symbol.special_initials['^'] = true
 M.symbol.special_initials['_'] = true
 M.symbol.special_initials['~'] = true
 -- special subsequents
+M.symbol.special_subsequents = {}
 M.symbol.special_subsequents['+'] = true
 M.symbol.special_subsequents['-'] = true
 M.symbol.special_subsequents['.'] = true
 M.symbol.special_subsequents['@'] = true
 
---------------------------------------------------------------------------------
--- "pair", the basis for a list
---------------------------------------------------------------------------------
-M.pair_mt = {
-    --[[
-    __tostring = function(t)
-        if t:empty() then
-            return '()'
-        end
-
-        local str = {}
-        table.insert(str, '(')
-        if t.car then
-            table.insert(str, tostring(t.car))
-        end
-        table.insert(str, ' . ')
-        if t.cdr then
-            table.insert(str, tostring(t.cdr))
-        else
-            table.insert(str, '()')
-        end
-        table.insert(str, ')')
-        return table.concat(str)
-    end
-    --]]
-    __tostring = function(t)
-        if t:empty() then
-            return '()'
-        end
-
-        local str = {}
-        table.insert(str, '(')
-        local pair = t
-
-        local inner = {}
-        while true do
-            table.insert(inner, tostring(pair.car))
-            if pair.cdr.type ~= 'pair' then
-                table.insert(inner, '.')
-                table.insert(inner, tostring(pair.cdr))
-                break
-            else
-                if pair.cdr:empty() then
-                    break
-                end
-                pair = pair.cdr
-            end
-        end
-        inner = table.concat(inner, ' ')
-        table.insert(str, inner)
-
-        table.insert(str, ')')
-        return table.concat(str)
-    end
-}
-M.pair = {
-    empty = function(t)
-        return t.car == nil and t.cdr == nil
-    end
-    ,
-    new = function(car, cdr)
-        local t = {}
-        t.type = 'pair'
-        t.car = car
-        t.cdr = cdr
-        return setmetatable(t, M.pair_mt)
-    end
-}
-M.pair_mt.__index = M.pair
-
--- dot operator for pairs
-M.dot_mt = {
-    __tostring = function(t)
-        return '__DOT__'
-    end
-}
-M.dot = {
-    new = function()
-        local t = {}
-        t.type = 'dot'
-        return setmetatable(t, M.dot_mt)
-    end
-}
+function M.symbol.new(value)
+    local t = {}
+    t.type = 'symbol'
+    t.value = value
+    return setmetatable(t, M.symbol_mt)
+end
 
 --------------------------------------------------------------------------------
--- <vector>
+-- <number> atom
 --------------------------------------------------------------------------------
-M.vector_mt = {
-    __tostring = function(t)
-        local str = {}
-        table.insert(str, '#(')
-        local inner = {}
-        for _, datum in ipairs(t.value) do
-            table.insert(inner, tostring(datum))
-        end
-        table.insert(str, table.concat(inner, ' '))
-        table.insert(str, ')')
-        return table.concat(str)
-    end
-}
-M.vector = {
-    new = function(lua_list)
-        local t = {}
-        t.type = 'vector'
-        t.value = lua_list
-        return setmetatable(t, M.vector_mt)
-    end
-}
---------------------------------------------------------------------------------
--- <number>
---------------------------------------------------------------------------------
-M.number_mt = {
-    __tostring = function(t)
-        return tostring(t.value)
-    end
-}
-M.number = {
-    decimal_digits = {}
-    ,
-    new = function(num)
-        local t = {}
-        t.type = 'number'
-        t.value = num
-        return setmetatable(t, M.number_mt)
-    end
-}
+M.number_mt = {}
+function M.number_mt.__tostring(t)
+    return tostring(t.value)
+end
+
+M.number = {}
+M.number.decimal_digits = {}
 M.number.decimal_digits['0'] = true
 M.number.decimal_digits['1'] = true
 M.number.decimal_digits['2'] = true
@@ -275,6 +153,131 @@ M.number.decimal_digits['7'] = true
 M.number.decimal_digits['8'] = true
 M.number.decimal_digits['9'] = true
 
+function M.number.new(num)
+    local t = {}
+    t.type = 'number'
+    t.value = num
+    return setmetatable(t, M.number_mt)
+end
+
+--------------------------------------------------------------------------------
+-- "pair", the basis for a list
+--------------------------------------------------------------------------------
+M.pair_mt = { }
+M.pair = {}
+M.pair_mt.__index = M.pair
+
+function M.pair_mt.__tostring(t)
+    if t:empty() then
+        return '()'
+    end
+
+    local str = {}
+    table.insert(str, '(')
+    local pair = t
+
+    local inner = {}
+    while true do
+        table.insert(inner, tostring(pair.car))
+        if pair.cdr.type ~= 'pair' then
+            table.insert(inner, '.')
+            table.insert(inner, tostring(pair.cdr))
+            break
+        else
+            if pair.cdr:empty() then
+                break
+            end
+            pair = pair.cdr
+        end
+    end
+    inner = table.concat(inner, ' ')
+    table.insert(str, inner)
+
+    table.insert(str, ')')
+    return table.concat(str)
+end
+
+function M.pair.empty(t)
+    return t.car == nil and t.cdr == nil
+end
+
+M.pair.new = function(car, cdr)
+    local t = {}
+    t.type = 'pair'
+    t.car = car
+    t.cdr = cdr
+    return setmetatable(t, M.pair_mt)
+end
+
+--------------------------------------------------------------------------------
+-- secret internal <dot> atom
+--------------------------------------------------------------------------------
+-- dot operator for pairs
+M.dot_mt = {}
+M.dot = {}
+function M.dot_mt.__tostring(t)
+    return '__DOT__'
+end
+
+function M.dot.new()
+    local t = {}
+    t.type = 'dot'
+    return setmetatable(t, M.dot_mt)
+end
+
+--------------------------------------------------------------------------------
+-- <vector>
+--------------------------------------------------------------------------------
+M.vector_mt = { }
+function M.vector_mt.__tostring(t)
+    local str = {}
+    table.insert(str, '#(')
+    local inner = {}
+    for _, datum in ipairs(t.value) do
+        table.insert(inner, tostring(datum))
+    end
+    table.insert(str, table.concat(inner, ' '))
+    table.insert(str, ')')
+    return table.concat(str)
+end
+
+M.vector = {}
+function M.vector.new(lua_list)
+    local t = {}
+    t.type = 'vector'
+    t.value = lua_list
+    return setmetatable(t, M.vector_mt)
+end
+
+--------------------------------------------------------------------------------
+-- <compound proc> atom
+--------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
+-- environment
+--
+-- Basically a linked list of linked lists. You check the tail linked list
+-- first for the symbol name, and if you can't find it traverse backwards.
+-- If you reach the head and still can't find the value, then the symbol
+-- is not bound.
+--
+-- Since we are in Lua, we can easily use dictionaries instead of linear search.
+--
+-- This is not an explicit Scheme atom, but something that is implicit, so
+-- capitalize
+--------------------------------------------------------------------------------
+M.Environment_mt = {}
+
+M.Environment = {}
+function M.Environment.new(previous_env)
+    local t = {}
+    t.previous_env = previous_env
+    return setmetatable(t, M.Environment_mt)
+end
+
+--------------------------------------------------------------------------------
+-- read
+--------------------------------------------------------------------------------
 local function SearchTillWhitespace(text, begin_index)
     while true do
         if (begin_index + 1) > #text then
@@ -635,6 +638,39 @@ function M.read(text)
     end
 
     return datum
+end
+
+--------------------------------------------------------------------------------
+-- eval
+--
+-- adapted from
+-- metacircular evaluator in SICP
+-- http://mitpress.mit.edu/sicp/full-text/sicp/book/node77.html
+-- and
+-- https://github.com/petermichaux/bootstrap-scheme/blob/v0.21/scheme.c
+--------------------------------------------------------------------------------
+local self_evaluating_types = {}
+self_evaluating_types['boolean'] = true
+self_evaluating_types['character'] = true
+self_evaluating_types['string'] = true
+self_evaluating_types['number'] = true
+function M.is_self_evaluating(expr)
+    return self_evaluating_types[expr.type]
+end
+
+function M.is_variable(expr)
+    return expr.type == 'symbol'
+end
+
+function M.lookup_variable_value(expr, env)
+end
+
+function M.eval(expr, env, proc, arguments, result)
+    if M.is_self_evaluating(expr) then
+        return expr
+    elseif M.is_variable(expr) then
+        return M.lookup_variable_value(expr, env)
+    end
 end
 
 return M
