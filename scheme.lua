@@ -792,6 +792,7 @@ function M.is_assignment(expr) return M.is_symbol_named(expr, 'set!') end
 function M.is_definition(expr) return M.is_symbol_named(expr, 'define') end
 function M.is_if(expr) return M.is_symbol_named(expr, 'if') end
 function M.is_lambda(expr) return M.is_symbol_named(expr, 'lambda') end
+function M.is_begin(expr) return M.is_symbol_named(expr, 'begin') end
 
 function M.eval(expr, env, proc, arguments, result)
     assert(expr)
@@ -837,6 +838,13 @@ function M.eval(expr, env, proc, arguments, result)
         local formals = expr.cdr.car
         local body = expr.cdr.cdr.car
         return M.compound_proc.new(formals, body, env)
+    elseif M.is_begin(expr) then
+        local pair = expr.cdr
+        while not pair.cdr:empty() do
+            M.eval(pair.car, env)
+            pair = pair.cdr
+        end
+        return M.eval(pair.car, env)
     else
         M._error('unable to eval expr of type: ' .. expr.type)
     end

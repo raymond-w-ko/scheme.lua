@@ -49,3 +49,6 @@ data_print(eval(read('(if #f 3.14)')[1]))
 
 data_print(eval(read('(if #f 3.14)')[1]))
 data_print(eval(read('(lambda (arg0 arg1 arg2) (+ arg0 arg1 arg2))')[1]))
+
+data_print(eval(read('(begin "cat")')[1]))
+data_print(eval(read('(begin "cat" "meow")')[1]))
