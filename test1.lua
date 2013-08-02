@@ -176,7 +176,4 @@ datum = nil
 print('weak table test - nothing should appear except core symbols')
 scheme.symbol.weak_cache['meow'] = {'test'}
 collectgarbage('collect')
-collectgarbage('collect')
-collectgarbage('collect')
-collectgarbage('collect')
 for k, v in pairs(scheme.symbol.weak_cache) do print(k .. ' -> ' .. tostring(v)) end

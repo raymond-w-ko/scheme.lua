@@ -820,38 +820,26 @@ function M.lookup_variable_value(expr, env)
     return env:lookup_symbol(expr)
 end
 
-function M.is_symbol_named(expr, name)
-    if expr.type == 'pair' and expr.car and expr.car.type == 'symbol' then
-        if expr.car.value == name then
-            return true
-        end
-    end
-
-    return false
-end
-
-function M.is_quoted(expr) return M.is_symbol_named(expr, 'quote') end
-function M.is_assignment(expr) return M.is_symbol_named(expr, 'set!') end
-function M.is_definition(expr) return M.is_symbol_named(expr, 'define') end
-function M.is_if(expr) return M.is_symbol_named(expr, 'if') end
-function M.is_lambda(expr) return M.is_symbol_named(expr, 'lambda') end
-function M.is_begin(expr) return M.is_symbol_named(expr, 'begin') end
-
 function M.eval(expr, env, proc, arguments, result)
     assert(expr)
     assert(env)
+
+    local operator
+    if expr.type == 'pair' and expr.car and expr.car.type == 'symbol' then
+        operator = expr.car
+    end
 
     if M.is_self_evaluating(expr) then
         return expr
     elseif M.is_variable(expr) then
         return M.lookup_variable_value(expr, env)
-    elseif M.is_quoted(expr) then
+    elseif operator == M.quote_symbol then
         return expr.cdr.car
-    elseif M.is_assignment(expr) then
+    elseif operator == M.set_symbol then
         local symbol = expr.cdr.car
         local value = M.eval(expr.cdr.cdr.car, env)
         return env:set_symbol(symbol, value)
-    elseif M.is_definition(expr) then
+    elseif operator == M.define_symbol then
         local arg0 = expr.cdr.car
         local arg1 = expr.cdr.cdr.car
         if arg0.type == 'symbol' then
@@ -859,7 +847,7 @@ function M.eval(expr, env, proc, arguments, result)
         elseif symbol.type == 'pair' then
             -- TODO (define ...) for functions
         end
-    elseif M.is_if(expr) then
+    elseif operator == M.if_symbol then
         local test = expr.cdr.car
         local consequent = expr.cdr.cdr.car
         local alternate = nil
@@ -877,11 +865,11 @@ function M.eval(expr, env, proc, arguments, result)
         else
             return M.eval(consequent, env)
         end
-    elseif M.is_lambda(expr) then
+    elseif operator == M.lambda_symbol then
         local formals = expr.cdr.car
         local body = expr.cdr.cdr.car
         return M.compound_proc.new(formals, body, env)
-    elseif M.is_begin(expr) then
+    elseif operator == M.begin_symbol then
         local pair = expr.cdr
         while not pair.cdr:empty() do
             M.eval(pair.car, env)

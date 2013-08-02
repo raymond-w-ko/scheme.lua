@@ -1,7 +1,6 @@
 local scheme = require 'scheme'
 
 function datum_print(datum)
-    io.write('---\n')
     for _, data in ipairs(datum) do
         io.write('type: ' .. data.type)
         io.write(' , ')
@@ -17,7 +16,6 @@ function data_print(data)
         return
     end
 
-    io.write('---\n')
     io.write('type: ' .. data.type)
     io.write(' , ')
     io.write('value: ' .. tostring(data.value))
@@ -52,3 +50,9 @@ data_print(eval(read('(lambda (arg0 arg1 arg2) (+ arg0 arg1 arg2))')[1]))
 
 data_print(eval(read('(begin "cat")')[1]))
 data_print(eval(read('(begin "cat" "meow")')[1]))
+
+datum = nil
+print('weak table test - nothing should appear except core symbols')
+scheme.symbol.weak_cache['meow'] = {'test'}
+collectgarbage('collect')
+for k, v in pairs(scheme.symbol.weak_cache) do print(k .. ' -> ' .. tostring(v)) end
