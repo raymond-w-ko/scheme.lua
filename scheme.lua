@@ -948,7 +948,37 @@ function M.eval(expr, env, proc, arguments, result)
         return M.eval(pair.car, env)
     elseif operator == M.cond_symbol then
         local transformed_expr = M.cond_to_if(expr)
-        print(transformed_expr)
+        return M.eval(transformed_expr, env)
+    elseif operator == M.let_symbol then
+        local vars = expr.cdr.car
+        --print('vars: ' .. tostring(vars))
+        local body = expr.cdr.cdr.car
+        --print('body: ' .. tostring(body))
+
+        local var_list = {}
+        local exp_list = {}
+        local pair = vars
+        while pair.car do
+            local var = pair.car.car
+            local expr = pair.car.cdr.car
+            table.insert(var_list, var)
+            table.insert(exp_list, expr)
+            pair = pair.cdr
+        end
+
+        local lambda_expr = {}
+        table.insert(lambda_expr, M.create_symbol('lambda'))
+        table.insert(lambda_expr, BuildList(var_list))
+        table.insert(lambda_expr, body)
+
+        local transformed_expr = {}
+        table.insert(transformed_expr, BuildList(lambda_expr))
+        for _, exp in ipairs(exp_list) do
+            table.insert(transformed_expr, exp)
+        end
+
+        transformed_expr = BuildList(transformed_expr)
+        --print(transformed_expr)
         return M.eval(transformed_expr, env)
     else
         M._error('unable to eval expr of type: ' .. expr.type)

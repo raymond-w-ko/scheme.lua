@@ -31,26 +31,38 @@ function eval(expr)
     return scheme.eval(expr, scheme.global_environment)
 end
 
-data_print(eval(read('#t')[1]))
-data_print(eval(read('#\\a')[1]))
-data_print(eval(read('"test string"')[1]))
-data_print(eval(read('3.14159')[1]))
+function self_evaluating_test()
+    data_print(eval(read('#t')[1]))
+    data_print(eval(read('#\\a')[1]))
+    data_print(eval(read('"test string"')[1]))
+    data_print(eval(read('3.14159')[1]))
+end
 
-data_print(eval(read("'(test)")[1]))
+function quote_test()
+    data_print(eval(read("'(test)")[1]))
+end
 
-data_print(eval(read('(set! var "hello, world")')[1]))
-data_print(eval(read('(define cat "meow")')[1]))
+function create_symbol_test()
+    data_print(eval(read('(set! var "hello, world")')[1]))
+    data_print(eval(read('(define cat "meow")')[1]))
+end
 
-data_print(eval(read('(if #t 3.14 "meow")')[1]))
-data_print(eval(read('(if #f 3.14 "meow")')[1]))
-data_print(eval(read('(if #f 3.14)')[1]))
+function if_test()
+    data_print(eval(read('(if #t 3.14 "meow")')[1]))
+    data_print(eval(read('(if #f 3.14 "meow")')[1]))
+    data_print(eval(read('(if #f 3.14)')[1]))
+end
 
-data_print(eval(read('(if #f 3.14)')[1]))
-data_print(eval(read('(lambda (arg0 arg1 arg2) (+ arg0 arg1 arg2))')[1]))
+function lambda_test()
+    data_print(eval(read('(lambda (arg0 arg1 arg2) (+ arg0 arg1 arg2))')[1]))
+end
 
-data_print(eval(read('(begin "cat")')[1]))
-data_print(eval(read('(begin "cat" "meow")')[1]))
+function begin_test()
+    data_print(eval(read('(begin "cat")')[1]))
+    data_print(eval(read('(begin "cat" "meow")')[1]))
+end
 
+function cond_test()
 data_print(eval(read([[
 (cond (else "cheeseburger"))
 ]])[1]))
@@ -89,10 +101,29 @@ data_print(eval(read([[
       (#t "meow"))
 ]])[1]))
 
-data_print(eval(read([[
+    data_print(eval(read([[
 (cond ("cat")
       (#t "meow"))
-]])[1]))
+    ]])[1]))
+end
+
+function let_test()
+    data_print(eval(read([[
+(let ((var0 "meow")
+      (var1 "cat")
+      (var2 "purr"))
+  (print var0 var1 var2))
+    ]])[1]))
+end
+
+self_evaluating_test()
+quote_test()
+create_symbol_test()
+if_test()
+lambda_test()
+begin_test()
+cond_test()
+let_test()
 
 datum = nil
 print('')
