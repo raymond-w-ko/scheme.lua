@@ -951,9 +951,7 @@ function M.eval(expr, env, proc, arguments, result)
         return M.eval(transformed_expr, env)
     elseif operator == M.let_symbol then
         local vars = expr.cdr.car
-        --print('vars: ' .. tostring(vars))
         local body = expr.cdr.cdr.car
-        --print('body: ' .. tostring(body))
 
         local var_list = {}
         local exp_list = {}
@@ -980,8 +978,15 @@ function M.eval(expr, env, proc, arguments, result)
         transformed_expr = BuildList(transformed_expr)
         --print(transformed_expr)
         return M.eval(transformed_expr, env)
+    elseif operator == M.and_symbol then
+        assert(false)
+    elseif operator == M.or_symbol then
+        assert(false)
+    elseif operator then
+        -- (some_operator ...)
+        local procedure = M.eval(expr, env)
     else
-        M._error('unable to eval expr of type: ' .. expr.type)
+        M._error('unable to eval expresson of type: ' .. expr.type)
     end
 end
 
