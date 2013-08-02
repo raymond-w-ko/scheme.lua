@@ -1,7 +1,6 @@
 local scheme = require 'scheme'
 
 function datum_print(datum)
-    io.write('---\n')
     for _, data in ipairs(datum) do
         io.write('type: ' .. data.type)
         io.write(' , ')
@@ -34,6 +33,8 @@ end
 
 function character_test()
     datum = scheme.read('#\\a')
+    datum_print(datum)
+    datum = scheme.read('#\\Z')
     datum_print(datum)
     datum = scheme.read('#\\newline')
     datum_print(datum)
@@ -170,3 +171,12 @@ list_test()
 vector_test()
 abbreviation_prefix_test()
 number_test()
+
+datum = nil
+print('weak table test - nothing should appear except core symbols')
+scheme.symbol.weak_cache['meow'] = {'test'}
+collectgarbage('collect')
+collectgarbage('collect')
+collectgarbage('collect')
+collectgarbage('collect')
+for k, v in pairs(scheme.symbol.weak_cache) do print(k .. ' -> ' .. tostring(v)) end

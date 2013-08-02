@@ -18,8 +18,9 @@ end
 --------------------------------------------------------------------------------
 -- <boolean> atom
 --------------------------------------------------------------------------------
-M.boolean_mt = {}
-function  M.boolean_mt.__tostring(t)
+M.boolean = {}
+M.boolean.mt = {}
+function  M.boolean.mt.__tostring(t)
     if t.value == true then
         return '#t'
     elseif t.value == false then
@@ -28,53 +29,68 @@ function  M.boolean_mt.__tostring(t)
         M._error('improperly initialized <boolean>')
     end
 end
-
-M.boolean = {}
 function M.boolean.new(value)
     local t = {}
     t.type = 'boolean'
     if value == 't' then t.value = true
     elseif value == 'f' then t.value = false
     end
-    return setmetatable(t, M.boolean_mt)
+    return setmetatable(t, M.boolean.mt)
+end
+
+M.true_boolean = M.boolean.new('t')
+M.false_boolean = M.boolean.new('f')
+
+function M.create_boolean(value)
+    if value == 't' then
+        return M.true_boolean
+    elseif value == 'f' then
+        return M.false_boolean
+    else
+        M._error('create_boolean() only "t" or "f"')
+    end
 end
 
 --------------------------------------------------------------------------------
 -- <character> atom
 --------------------------------------------------------------------------------
-M.character_mt = {}
-function M.character_mt.__tostring(t)
+M.character = {}
+M.character.chars = {}
+-- TODO: add more character names
+M.character.chars['newline'] = '\n'
+M.character.chars['space'] = ' '
+M.character.mt = {}
+function M.character.mt.__tostring(t)
     if t.value == nil then
         M._error('improperly initialized <character>')
     end
     return '#\\' .. t.value
 end
 
-M.character = {}
 function M.character.new(value)
     local t = {}
     t.type = 'character'
     t.value = value
-    return setmetatable(t, M.character_mt)
+    return setmetatable(t, M.character.mt)
 end
 
 --------------------------------------------------------------------------------
 -- <string> atom
 --------------------------------------------------------------------------------
-M.string_mt = {}
-function M.string_mt.__tostring(t)
+M.string = {}
+M.string.mt = {}
+function M.string.mt.__tostring(t)
     if t.value == nil then
         M._error('improperly initialized <string>')
     end
     return '"' .. t.value .. '"'
 end
 
-M.string = {}
 function M.string.new(value)
     local t = {}
     t.type = 'string'
     t.value = value
-    return setmetatable(t, M.string_mt)
+    return setmetatable(t, M.string.mt)
 end
 
 M.unspecified_value = M.string.new('unspecified')
@@ -82,15 +98,36 @@ M.unspecified_value = M.string.new('unspecified')
 --------------------------------------------------------------------------------
 -- <symbol> atom
 --------------------------------------------------------------------------------
-M.symbol_mt = {}
-function M.symbol_mt.__tostring(t)
+M.symbol = {}
+M.symbol.mt = {}
+function M.symbol.mt.__tostring(t)
     if t.value == nil then
         M._error('improperly initialized <symbol>')
     end
     return t.value
 end
 
-M.symbol = {}
+M.symbol.weak_cache = {}
+setmetatable(M.symbol.weak_cache, {__mode = 'v'})
+
+function M.symbol.new(value)
+    local t = {}
+    t.type = 'symbol'
+    t.value = value
+    return setmetatable(t, M.symbol.mt)
+end
+
+function M.create_symbol(identifier)
+    local symbol = M.symbol.weak_cache[identifier]
+    if symbol then
+        return symbol
+    end
+
+    symbol = M.symbol.new(identifier)
+    M.symbol.weak_cache[identifier] = symbol
+    return symbol
+end
+
 -- letters
 M.symbol.letters = {}
 for i = string.byte('a'), string.byte('z') do
@@ -127,22 +164,34 @@ M.symbol.special_subsequents['-'] = true
 M.symbol.special_subsequents['.'] = true
 M.symbol.special_subsequents['@'] = true
 
-function M.symbol.new(value)
-    local t = {}
-    t.type = 'symbol'
-    t.value = value
-    return setmetatable(t, M.symbol_mt)
-end
+M.quote_symbol = M.create_symbol('quote')
+M.define_symbol = M.create_symbol('define')
+M.set_symbol = M.create_symbol('set!')
+M.if_symbol = M.create_symbol('if')
+M.lambda_symbol = M.create_symbol('lambda')
+M.begin_symbol = M.create_symbol('begin')
+M.cond_symbol = M.create_symbol('cond')
+M.else_symbol = M.create_symbol('else')
+M.let_symbol = M.create_symbol('let')
+M.and_symbol = M.create_symbol('and')
+M.or_symbol = M.create_symbol('or')
 
 --------------------------------------------------------------------------------
 -- <number> atom
 --------------------------------------------------------------------------------
-M.number_mt = {}
-function M.number_mt.__tostring(t)
+M.number = {}
+M.number.mt = {}
+function M.number.mt.__tostring(t)
     return tostring(t.value)
 end
 
-M.number = {}
+function M.number.new(num)
+    local t = {}
+    t.type = 'number'
+    t.value = num
+    return setmetatable(t, M.number.mt)
+end
+
 M.number.decimal_digits = {}
 M.number.decimal_digits['0'] = true
 M.number.decimal_digits['1'] = true
@@ -186,21 +235,14 @@ M.number.other_valid_characters['d'] = true
 M.number.other_valid_characters['e'] = true
 M.number.other_valid_characters['f'] = true
 
-function M.number.new(num)
-    local t = {}
-    t.type = 'number'
-    t.value = num
-    return setmetatable(t, M.number_mt)
-end
-
 --------------------------------------------------------------------------------
 -- "pair", the basis for a list
 --------------------------------------------------------------------------------
-M.pair_mt = {}
 M.pair = {}
-M.pair_mt.__index = M.pair
+M.pair.mt = {}
+M.pair.mt.__index = M.pair
 
-function M.pair_mt.__tostring(t)
+function M.pair.mt.__tostring(t)
     if t:empty() then
         return '()'
     end
@@ -239,30 +281,33 @@ M.pair.new = function(car, cdr)
     t.type = 'pair'
     t.car = car
     t.cdr = cdr
-    return setmetatable(t, M.pair_mt)
+    return setmetatable(t, M.pair.mt)
 end
 
 --------------------------------------------------------------------------------
 -- secret internal <dot> atom
 --------------------------------------------------------------------------------
 -- dot operator for pairs
-M.dot_mt = {}
 M.dot = {}
-function M.dot_mt.__tostring(t)
+M.dot.mt = {}
+
+function M.dot.mt.__tostring(t)
     return '__DOT__'
 end
 
 function M.dot.new()
     local t = {}
     t.type = 'dot'
-    return setmetatable(t, M.dot_mt)
+    return setmetatable(t, M.dot.mt)
 end
 
 --------------------------------------------------------------------------------
 -- <vector>
 --------------------------------------------------------------------------------
-M.vector_mt = {}
-function M.vector_mt.__tostring(t)
+M.vector = {}
+M.vector.mt = {}
+
+function M.vector.mt.__tostring(t)
     local str = {}
     table.insert(str, '#(')
     local inner = {}
@@ -274,19 +319,19 @@ function M.vector_mt.__tostring(t)
     return table.concat(str)
 end
 
-M.vector = {}
 function M.vector.new(lua_list)
     local t = {}
     t.type = 'vector'
     t.value = lua_list
-    return setmetatable(t, M.vector_mt)
+    return setmetatable(t, M.vector.mt)
 end
 
 --------------------------------------------------------------------------------
 -- <compound_proc> atom
 --------------------------------------------------------------------------------
-M.compound_proc_mt = {}
-function M.compound_proc_mt.__tostring(t)
+M.compound_proc = {}
+M.compound_proc.mt = {}
+function M.compound_proc.mt.__tostring(t)
     local str = {}
     table.insert(str, '(lambda (')
 
@@ -302,14 +347,13 @@ function M.compound_proc_mt.__tostring(t)
     return table.concat(str)
 end
 
-M.compound_proc = {}
 function M.compound_proc.new(formals, body, env)
     local t = {}
     t.type = 'compound_proc'
     t.formals = formals
     t.body = body
     t.env = env
-    return setmetatable(t, M.compound_proc_mt)
+    return setmetatable(t, M.compound_proc.mt)
 end
 
 --------------------------------------------------------------------------------
@@ -325,18 +369,19 @@ end
 -- This is not an explicit Scheme atom, but something that is implicit, so
 -- capitalize
 --------------------------------------------------------------------------------
-M.Environment_mt = {}
-function M.Environment_mt.lookup_symbol(t, symbol)
+M.Environment = {}
+M.Environment.mt = {}
+function M.Environment.mt.lookup_symbol(t, symbol)
     if t.vars[symbol.value] ~= nil then
         return t.vars[symbol.value]
     elseif t.previous_env ~= nil then
-        return M.Environment_mt.lookup_symbol(t.previous_env, symbol.value)
+        return M.Environment.mt.lookup_symbol(t.previous_env, symbol.value)
     else
         M._error('unbound symbol: ' .. symbol.value)
     end
 end
 
-function M.Environment_mt.define_symbol(t, symbol, value)
+function M.Environment.mt.define_symbol(t, symbol, value)
     if t.vars[symbol.value] ~= nil and t.previous_env ~= nil then
         M._error('symbol already bound in a non top level environment: ' .. symbol.name)
     else
@@ -345,10 +390,10 @@ function M.Environment_mt.define_symbol(t, symbol, value)
     end
 end
 
-function M.Environment_mt.set_symbol(t, symbol, value)
+function M.Environment.mt.set_symbol(t, symbol, value)
     if t.vars[symbol.value] == nil and t.previous_env ~= nil then
         if t.previous_env then
-            return M.Environment_mt.set_symbol(t.previous_env, symbol, value)
+            return M.Environment.mt.set_symbol(t.previous_env, symbol, value)
         else
             M._error('set! could not find bound symbol: ' .. symbol.value)
         end
@@ -358,12 +403,11 @@ function M.Environment_mt.set_symbol(t, symbol, value)
     return M.unspecified_value
 end
 
-M.Environment = {}
 function M.Environment.new(previous_env)
     local t = {}
     t.previous_env = previous_env
     t.vars = {}
-    return setmetatable(t, {__index = M.Environment_mt})
+    return setmetatable(t, {__index = M.Environment.mt})
 end
 
 -- the default outermost environment containing core functions and etc.
@@ -372,17 +416,15 @@ M.global_environment = M.Environment.new(nil)
 --------------------------------------------------------------------------------
 -- read
 --------------------------------------------------------------------------------
-local function SearchTillWhitespace(text, begin_index)
+local function SearchTillNonLetter(text, begin_index)
     while true do
+        -- EOF
         if (begin_index + 1) > #text then
             return begin_index
         end
         local ch = text:sub(begin_index + 1, begin_index + 1)
-        if ch == '\t'  or ch == '\n' or ch == '\r' then
+        if not M.symbol.letters[ch] then
             return begin_index
-        end
-        if ch == ' ' then
-            return begin_index + 1
         end
         begin_index = begin_index + 1
     end
@@ -390,6 +432,7 @@ end
 
 function SearchTillNumberEnd(text, begin_index)
     while true do
+        -- EOF
         if (begin_index + 1) > #text then
             return begin_index
         end
@@ -497,13 +540,13 @@ local function DatumInsert(datum, data, prefix_stack)
         local meta_data = {}
         local expanded_abbrev
         if prefix == '\'' then
-            expanded_abbrev = M.symbol.new('quote')
+            expanded_abbrev = M.create_symbol('quote')
         elseif prefix == '`' then
-            expanded_abbrev = M.symbol.new('quasiquote')
+            expanded_abbrev = M.create_symbol('quasiquote')
         elseif prefix == ',' then
-            expanded_abbrev = M.symbol.new('unquote')
+            expanded_abbrev = M.create_symbol('unquote')
         elseif prefix == ',@' then
-            expanded_abbrev = M.symbol.new('unquote-splicing')
+            expanded_abbrev = M.create_symbol('unquote-splicing')
         end
         table.insert(meta_data, expanded_abbrev)
         table.insert(meta_data, data)
@@ -590,7 +633,7 @@ function M.read(text)
             local m = text:sub(i + 1, i + 1)
             if m == 't' or m == 'f' then
                 -- boolean true
-                local data = M.boolean.new(m)
+                local data = M.create_boolean(m)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 2
@@ -606,14 +649,15 @@ function M.read(text)
                 end
                 -- TODO: doesn't work in all cases, like where a paren follows,
                 -- need to revise to be more robost
-                local end_index = SearchTillWhitespace(text, i + 2)
-                local character = text:sub(i + 2, end_index)
-                if character:lower() == 'space' then
-                    character = ' '
-                elseif character:lower() == 'newline' then
-                    character = '\n'
+                local end_index = SearchTillNonLetter(text, i + 2)
+                local ch = text:sub(i + 2, end_index)
+                if ch:len() > 1 then
+                    local single_ch = M.character.chars[ch]
+                    if single_ch then
+                        ch = single_ch
+                    end
                 end
-                local data = M.character.new(character)
+                local data = M.character.new(ch)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = end_index + 1
@@ -632,7 +676,7 @@ function M.read(text)
         elseif ch == '+' or ch == '-' then
             -- peculiar symbol '+' and '-'
             if (i + 1) > #text or IsWhitespace(text:sub(i + 1, i + 1)) then
-                local data = M.symbol.new(ch)
+                local data = M.create_symbol(ch)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 1
@@ -669,8 +713,7 @@ function M.read(text)
                 if not ((i + 4) > #text) and not IsWhitespace(text:sub(i + 4, i + 4)) then
                     M._error('"..." must be followed by whitespace or EOF')
                 end
-                local data = M.symbol.new('...')
-                table.insert(datum, data)
+                local data = M.create_symbol('...')
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
                 i = i + 4
@@ -679,7 +722,7 @@ function M.read(text)
             M._error('symbols cannot start with "@"')
         elseif M.symbol.letters[ch] or M.symbol.special_initials[ch] then
             local symbol, end_index = ExtractSymbol(text, i)
-            local data = M.symbol.new(symbol)
+            local data = M.create_symbol(symbol)
             DatumInsert(datum, data, prefix_stack)
             prefix_stack = {}
             i = end_index + 1
