@@ -51,7 +51,51 @@ data_print(eval(read('(lambda (arg0 arg1 arg2) (+ arg0 arg1 arg2))')[1]))
 data_print(eval(read('(begin "cat")')[1]))
 data_print(eval(read('(begin "cat" "meow")')[1]))
 
+data_print(eval(read([[
+(cond (else "cheeseburger"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#t "cat")
+      (else "cheeseburger"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#f "cat")
+      (else "cheeseburger"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#f "cat")
+      (#t "meow")
+      (else "cheeseburger"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#f "cat")
+      (#t "meow"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#f "cat")
+      (#f "meow"))
+]])[1]))
+
+data_print(eval(read([[
+(cond (#t "cat" "purr")
+      (#t "meow" "purr")
+      (#t "meow" "purr")
+      (#t "meow" "purr")
+      (#t "meow"))
+]])[1]))
+
+data_print(eval(read([[
+(cond ("cat")
+      (#t "meow"))
+]])[1]))
+
 datum = nil
+print('')
 print('weak table test - nothing should appear except core symbols')
 scheme.symbol.weak_cache['meow'] = {'test'}
 collectgarbage('collect')

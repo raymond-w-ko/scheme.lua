@@ -820,6 +820,76 @@ function M.lookup_variable_value(expr, env)
     return env:lookup_symbol(expr)
 end
 
+function M.last_expr(expr)
+    return expr.cdr:empty()
+end
+
+function M.sequence_to_expr(seq)
+    if seq.type ~= 'pair' then
+        return seq
+    elseif seq:empty() then
+        return seq
+    elseif M.last_expr(seq) then
+        return seq.car
+    else
+        local pair = M.pair.new(M.create_symbol('begin'), seq)
+        return pair
+    end
+end
+
+function M.make_if(predicate, consequent, alternate)
+    local expr = {}
+    table.insert(expr, M.create_symbol('if'))
+    table.insert(expr, predicate)
+    table.insert(expr, consequent)
+    if not (alternate.type == 'pair' and alternate:empty()) then
+        table.insert(expr, alternate)
+    end
+    return BuildList(expr)
+end
+
+-- TODO implement (condition => expression) form
+function M.cond_to_if(expr)
+    local function cond_clauses(expr) return expr.cdr end
+    local function cond_predicate(clause) return clause.car end
+    local function cond_actions(clause)
+        -- TODO: solve the case where "expr" is empty in "(cond (test expr))"
+        -- without duplicating "expr", since that can cause double side effects
+        if clause.cdr:empty() then
+            return clause.car
+        else
+            return clause.cdr
+        end
+    end
+
+    local function cond_else_clause(expr)
+        return cond_predicate(expr) == M.else_symbol
+    end
+    local function expand_clauses(clauses)
+        assert(clauses.type == 'pair')
+        if clauses:empty() then
+            return M.unspecified_value
+        else
+            local first = clauses.car
+            local rest = clauses.cdr
+            if cond_else_clause(first) then
+                if rest:empty() then
+                    return M.sequence_to_expr(cond_actions(first))
+                else
+                    M._error('ELSE clause is not last in (cond ...)')
+                end
+            else
+                return M.make_if(
+                    cond_predicate(first),
+                    M.sequence_to_expr(cond_actions(first)),
+                    expand_clauses(rest))
+            end
+        end
+    end
+
+    return expand_clauses(cond_clauses(expr))
+end
+
 function M.eval(expr, env, proc, arguments, result)
     assert(expr)
     assert(env)
@@ -876,6 +946,10 @@ function M.eval(expr, env, proc, arguments, result)
             pair = pair.cdr
         end
         return M.eval(pair.car, env)
+    elseif operator == M.cond_symbol then
+        local transformed_expr = M.cond_to_if(expr)
+        print(transformed_expr)
+        return M.eval(transformed_expr, env)
     else
         M._error('unable to eval expr of type: ' .. expr.type)
     end
