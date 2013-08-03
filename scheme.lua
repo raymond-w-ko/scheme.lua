@@ -675,8 +675,6 @@ function M.read(text)
                 if i + 2 > #text then
                     M._error('expected more input after #\\')
                 end
-                -- TODO: doesn't work in all cases, like where a paren follows,
-                -- need to revise to be more robost
                 local end_index = SearchTillNonLetter(text, i + 2)
                 local ch = text:sub(i + 2, end_index)
                 if ch:len() > 1 then
