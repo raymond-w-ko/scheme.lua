@@ -2,6 +2,7 @@
 -- do:
 -- local scheme = require 'scheme'
 -- to use this
+require 'strict'
 
 local M = {}
 M._error = function(msg)
@@ -327,6 +328,22 @@ function M.vector.new(lua_list)
 end
 
 --------------------------------------------------------------------------------
+-- <primitive_proc> atom
+--------------------------------------------------------------------------------
+M.primitive_proc = {}
+M.primitive_proc.mt = {}
+function M.primitive_proc.mt__tostring(t)
+    return tostring(t.fn)
+end
+
+function M.primitive_proc.new(fn)
+    local t = {}
+    t.type = 'primitive_proc'
+    t.fn = fn
+    return setmetatable(t, M.primitive_proc.mt)
+end
+
+--------------------------------------------------------------------------------
 -- <compound_proc> atom
 --------------------------------------------------------------------------------
 M.compound_proc = {}
@@ -375,7 +392,7 @@ function M.Environment.mt.lookup_symbol(t, symbol)
     if t.vars[symbol.value] ~= nil then
         return t.vars[symbol.value]
     elseif t.previous_env ~= nil then
-        return M.Environment.mt.lookup_symbol(t.previous_env, symbol.value)
+        return M.Environment.mt.lookup_symbol(t.previous_env, symbol)
     else
         M._error('unbound symbol: ' .. symbol.value)
     end
@@ -403,11 +420,22 @@ function M.Environment.mt.set_symbol(t, symbol, value)
     return M.unspecified_value
 end
 
+function M.Environment.__tostring(t)
+    local str = {}
+    for symbol_name, object in pairs(t.vars) do
+        table.insert(str, symbol_name .. ' -> ' .. tostring(object))
+    end
+    return table.concat(str, '\n')
+end
+
+function M.Environment.debug_print(t)
+end
+
 function M.Environment.new(previous_env)
     local t = {}
     t.previous_env = previous_env
     t.vars = {}
-    return setmetatable(t, {__index = M.Environment.mt})
+    return setmetatable(t, {__index = M.Environment.mt, __tostring = M.Environment.__tostring})
 end
 
 -- the default outermost environment containing core functions and etc.
@@ -890,6 +918,41 @@ function M.cond_to_if(expr)
     return expand_clauses(cond_clauses(expr))
 end
 
+function M.list_of_values(expr, env)
+    if expr:empty() then
+        return M.pair.new(nil, nil)
+    else
+        return M.pair.new(
+            M.eval(expr.car, env),
+            M.list_of_values(expr.cdr, env))
+    end
+end
+
+function M.prepare_apply_operands(arguments)
+    if arguments.cdr:empty() then
+        return arguments.car
+    else
+        return M.pair.new(
+            arguments.car,
+            M.prepare_apply_operands(arguments.cdr))
+    end
+end
+
+function M.make_begin(seq)
+    return M.pair.new(M.create_symbol('begin'), seq)
+end
+
+function M.extend_environment(formals, arguments, previous_env)
+    local env = M.Environment.new(previous_env)
+    while formals.car do
+        env:define_symbol(formals.car, arguments.car)
+        -- advance
+        formals = formals.cdr
+        arguments = arguments.cdr
+    end
+    return env
+end
+
 function M.eval(expr, env, proc, arguments, result)
     assert(expr)
     assert(env)
@@ -937,7 +1000,7 @@ function M.eval(expr, env, proc, arguments, result)
         end
     elseif operator == M.lambda_symbol then
         local formals = expr.cdr.car
-        local body = expr.cdr.cdr.car
+        local body = expr.cdr.cdr
         return M.compound_proc.new(formals, body, env)
     elseif operator == M.begin_symbol then
         local pair = expr.cdr
@@ -982,12 +1045,86 @@ function M.eval(expr, env, proc, arguments, result)
         assert(false)
     elseif operator == M.or_symbol then
         assert(false)
-    elseif operator then
-        -- (some_operator ...)
-        local procedure = M.eval(expr, env)
+    elseif expr.type == 'pair' then
+        -- (function ...)
+        local procedure = M.eval(expr.car, env)
+        local arguments = M.list_of_values(expr.cdr, env)
+
+        if procedure.type == 'primitive_proc'
+            and procedure.fn == M.eval then
+            return M.eval(arguments.car, arguments.cdr.car)
+        end
+
+        if procedure.type == 'primitive_proc'
+            and procedure.fn == M.apply then
+            procedure = arguments.car
+            arguments = M.prepare_apply_operands(arguments.cdr)
+        end
+
+        if procedure.type == 'primitive_proc' then
+            return procedure.fn(arguments)
+        elseif procedure.type == 'compound_proc' then
+            local new_expr = M.make_begin(procedure.body)
+            local new_env = M.extend_environment(
+                procedure.formals,
+                arguments,
+                procedure.env)
+            return M.eval(new_expr, new_env)
+        else
+            M._error('could not evaluate procedure of type: ' .. procedure.type)
+        end
     else
-        M._error('unable to eval expresson of type: ' .. expr.type)
+        M._error('unable to eval expresson of type: ' .. expr.type .. ' and value: ' .. tostring(expr.value))
     end
 end
+
+function M.apply()
+end
+
+--------------------------------------------------------------------------------
+-- primitive functions
+--------------------------------------------------------------------------------
+M.primitive_symbols = {}
+local function register_primitive(symbol_name, fn)
+    local symbol = M.create_symbol(symbol_name)
+    local primitive_proc = M.primitive_proc.new(fn)
+    M.global_environment:define_symbol(symbol, primitive_proc)
+    M.primitive_symbols[symbol] = primitive_proc
+end
+
+-- (eval)
+register_primitive('eval', M.eval)
+
+local function prim_apply()
+    M._error('apply primitive should never be directly called')
+    assert(false)
+end
+register_primitive('apply', M.apply)
+
+-- (print)
+local function prim_print(args)
+    local str = {}
+    while args.car do
+        table.insert(str, args.car.value)
+        args = args.cdr
+    end
+
+    print(table.concat(str, ' '))
+
+    return M.unspecified_value
+end
+register_primitive('print', prim_print)
+
+-- (+)
+local function prim_add(args)
+    local sum = 0
+    while args.car do
+        sum = sum + args.car.value
+        args = args.cdr
+    end
+
+    return M.number.new(sum)
+end
+register_primitive('+', prim_add)
 
 return M

@@ -116,6 +116,12 @@ function let_test()
     ]])[1]))
 end
 
+function application_test()
+    data_print(eval(read([[
+(+ 1 2 3)
+    ]])[1]))
+end
+
 self_evaluating_test()
 quote_test()
 create_symbol_test()
@@ -124,6 +130,7 @@ lambda_test()
 begin_test()
 cond_test()
 let_test()
+application_test()
 
 datum = nil
 print('')
