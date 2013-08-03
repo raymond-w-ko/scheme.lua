@@ -132,6 +132,14 @@ function M.create_symbol(identifier)
     return symbol
 end
 
+local gensym_symbol_counter = 9001
+function M.gensym(prefix)
+    prefix = prefix or 'G__'
+    local name = prefix .. gensym_symbol_counter
+    gensym_symbol_counter = gensym_symbol_counter + 1
+    return M.create_symbol(name)
+end
+
 -- letters
 M.symbol.letters = {}
 for i = string.byte('a'), string.byte('z') do
@@ -537,7 +545,7 @@ local function ExtractSymbol(text, begin_index)
     return table.concat(name), i - 1
 end
 
-local function BuildList(lua_list)
+function M.BuildList(lua_list)
     local list = M.pair.new(nil, nil)
     local previous_pair = nil
     local current_pair = list
@@ -581,7 +589,7 @@ local function DatumInsert(datum, data, prefix_stack)
         end
         table.insert(meta_data, expanded_abbrev)
         table.insert(meta_data, data)
-        data = BuildList(meta_data)
+        data = M.BuildList(meta_data)
     end
     table.insert(datum, data)
 end
@@ -802,7 +810,7 @@ function M.read(text)
                 DatumInsert(datum, scheme_vector, prefix_stack_of_list[prelist])
                 prefix_stack_of_list[prelist] = nil
             else
-                local scheme_list = BuildList(prelist)
+                local scheme_list = M.BuildList(prelist)
                 DatumInsert(datum, scheme_list, prefix_stack_of_list[prelist])
                 prefix_stack_of_list[prelist] = nil
             end
@@ -874,7 +882,7 @@ function M.make_if(predicate, consequent, alternate)
     if not (alternate.type == 'pair' and alternate:empty()) then
         table.insert(expr, alternate)
     end
-    return BuildList(expr)
+    return M.BuildList(expr)
 end
 
 -- TODO implement (condition => expression) form
@@ -882,13 +890,7 @@ function M.cond_to_if(expr)
     local function cond_clauses(expr) return expr.cdr end
     local function cond_predicate(clause) return clause.car end
     local function cond_actions(clause)
-        -- TODO: solve the case where "expr" is empty in "(cond (test expr))"
-        -- without duplicating "expr", since that can cause double side effects
-        if clause.cdr:empty() then
-            return clause.car
-        else
-            return clause.cdr
-        end
+        return clause.cdr
     end
 
     local function cond_else_clause(expr)
@@ -908,10 +910,54 @@ function M.cond_to_if(expr)
                     M._error('ELSE clause is not last in (cond ...)')
                 end
             else
-                return M.make_if(
-                    cond_predicate(first),
-                    M.sequence_to_expr(cond_actions(first)),
+                local bindings = {}
+                local predicate = cond_predicate(first)
+                local consequent = cond_actions(first)
+                if consequent:empty() then
+                    -- check if expr is missing in clause
+                    -- e.g. (cond (test)) instead of (cond (test expr))
+                    local binding = {}
+                    local symbol = M.gensym()
+                    table.insert(binding, symbol)
+                    table.insert(binding, predicate)
+                    binding = M.BuildList(binding)
+                    table.insert(bindings, binding)
+                    consequent = symbol
+                    predicate = symbol
+                elseif consequent.type == 'pair'
+                    -- check if using special => form
+                    -- e.g. (cond (test => expr)) instead of (cond (test expr))
+                    and consequent.car.type == 'symbol'
+                    and consequent.car.value == '=>' then
+                    local binding = {}
+                    local symbol = M.gensym()
+                    table.insert(binding, symbol)
+                    table.insert(binding, predicate)
+                    binding = M.BuildList(binding)
+                    table.insert(bindings, binding)
+
+                    predicate = symbol
+                    local application = M.pair.new(symbol, M.pair.new())
+                    application = M.pair.new(consequent.cdr.car, application)
+                    consequent = M.BuildList({application})
+                    print('--------------------------------------------------------------------------------')
+                    print(consequent)
+                end
+
+                local transformed_expr = M.make_if(
+                    predicate,
+                    M.sequence_to_expr(consequent),
                     expand_clauses(rest))
+
+                if #bindings > 0 then
+                    local let_wrapper = {}
+                    table.insert(let_wrapper, M.create_symbol('let'))
+                    table.insert(let_wrapper, M.BuildList(bindings))
+                    table.insert(let_wrapper, transformed_expr)
+                    return M.BuildList(let_wrapper)
+                else
+                    return transformed_expr
+                end
             end
         end
     end
@@ -954,7 +1000,7 @@ function M.extend_environment(formals, arguments, previous_env)
     return env
 end
 
-function M.eval(expr, env, proc, arguments, result)
+function M.eval(expr, env)
     assert(expr)
     assert(env)
 
@@ -1012,6 +1058,7 @@ function M.eval(expr, env, proc, arguments, result)
         return M.eval(pair.car, env)
     elseif operator == M.cond_symbol then
         local transformed_expr = M.cond_to_if(expr)
+        print(transformed_expr)
         return M.eval(transformed_expr, env)
     elseif operator == M.let_symbol then
         local vars = expr.cdr.car
@@ -1030,16 +1077,16 @@ function M.eval(expr, env, proc, arguments, result)
 
         local lambda_expr = {}
         table.insert(lambda_expr, M.create_symbol('lambda'))
-        table.insert(lambda_expr, BuildList(var_list))
+        table.insert(lambda_expr, M.BuildList(var_list))
         table.insert(lambda_expr, body)
 
         local transformed_expr = {}
-        table.insert(transformed_expr, BuildList(lambda_expr))
+        table.insert(transformed_expr, M.BuildList(lambda_expr))
         for _, exp in ipairs(exp_list) do
             table.insert(transformed_expr, exp)
         end
 
-        transformed_expr = BuildList(transformed_expr)
+        transformed_expr = M.BuildList(transformed_expr)
         --print(transformed_expr)
         return M.eval(transformed_expr, env)
     elseif operator == M.and_symbol then

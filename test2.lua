@@ -102,9 +102,17 @@ data_print(eval(read([[
 ]])[1]))
 
     data_print(eval(read([[
-(cond ("cat")
+(cond (#f)
+      ((+ 1 1))
       (#t "meow"))
     ]])[1]))
+
+    data_print(eval(read([[
+(cond (#f)
+      ((+ 1 1) => (lambda (x) (+ 1000 x)))
+      (else "pizza"))
+    ]])[1]))
+
 end
 
 function let_test()
