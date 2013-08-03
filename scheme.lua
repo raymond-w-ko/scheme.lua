@@ -59,7 +59,10 @@ M.character = {}
 M.character.chars = {}
 -- TODO: add more character names
 M.character.chars['newline'] = '\n'
+M.character.chars['linefeed'] = '\n'
+M.character.chars['return'] = '\r'
 M.character.chars['space'] = ' '
+M.character.chars['tab'] = '\t'
 M.character.mt = {}
 function M.character.mt.__tostring(t)
     if t.value == nil then
