@@ -818,6 +818,7 @@ function M.read(text)
 
             paren_balance = paren_balance - 1
         else
+            print('read() encountered unexpected character')
             print(tostring(ch))
             assert(false)
         end
@@ -940,8 +941,6 @@ function M.cond_to_if(expr)
                     local application = M.pair.new(symbol, M.pair.new())
                     application = M.pair.new(consequent.cdr.car, application)
                     consequent = M.BuildList({application})
-                    print('--------------------------------------------------------------------------------')
-                    print(consequent)
                 end
 
                 local transformed_expr = M.make_if(
@@ -1058,7 +1057,7 @@ function M.eval(expr, env)
         return M.eval(pair.car, env)
     elseif operator == M.cond_symbol then
         local transformed_expr = M.cond_to_if(expr)
-        print(transformed_expr)
+        --print(transformed_expr)
         return M.eval(transformed_expr, env)
     elseif operator == M.let_symbol then
         local vars = expr.cdr.car
