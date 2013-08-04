@@ -1000,8 +1000,7 @@ function M.extend_environment(formals, arguments, previous_env)
 end
 
 function M.eval(expr, env)
-    assert(expr)
-    assert(env)
+    assert(expr and env)
 
     local operator
     if expr.type == 'pair' and expr.car and expr.car.type == 'symbol' then
@@ -1089,9 +1088,31 @@ function M.eval(expr, env)
         --print(transformed_expr)
         return M.eval(transformed_expr, env)
     elseif operator == M.and_symbol then
-        assert(false)
+        local test = expr.cdr
+        if test:empty() then
+            return M.true_boolean
+        end
+        while not test.cdr:empty() do
+            local result = M.eval(test.car, env)
+            if result == M.false_boolean then
+                return result
+            end
+            test = test.cdr
+        end
+        return M.eval(test.car, env)
     elseif operator == M.or_symbol then
-        assert(false)
+        local test = expr.cdr
+        if test:empty() then
+            return M.false_boolean
+        end
+        while not test.cdr:empty() do
+            local result = M.eval(test.car, env)
+            if result ~= M.false_boolean then
+                return result
+            end
+            test = test.cdr
+        end
+        return M.eval(test.car, env)
     elseif expr.type == 'pair' then
         -- (function ...)
         local procedure = M.eval(expr.car, env)

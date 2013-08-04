@@ -130,6 +130,58 @@ function application_test()
     ]])[1]))
 end
 
+function and_test()
+    data_print(eval(read([[
+(and)
+    ]])[1]))
+
+    data_print(eval(read([[
+(and 1234)
+    ]])[1]))
+
+    data_print(eval(read([[
+(and #f "feline")
+    ]])[1]))
+
+    data_print(eval(read([[
+(and #t)
+    ]])[1]))
+
+    data_print(eval(read([[
+(and #t "cat")
+    ]])[1]))
+
+    data_print(eval(read([[
+(and "cat" 1234 "god" #f "purr")
+    ]])[1]))
+end
+
+function or_test()
+    data_print(eval(read([[
+(or)
+    ]])[1]))
+
+    data_print(eval(read([[
+(or 1234)
+    ]])[1]))
+
+    data_print(eval(read([[
+(or #f "feline")
+    ]])[1]))
+
+    data_print(eval(read([[
+(or #t)
+    ]])[1]))
+
+    data_print(eval(read([[
+(or #t "cat")
+    ]])[1]))
+
+    data_print(eval(read([[
+(or "cat" 1234 "god" #f "purr")
+    ]])[1]))
+end
+
 self_evaluating_test()
 quote_test()
 create_symbol_test()
@@ -139,6 +191,8 @@ begin_test()
 cond_test()
 let_test()
 application_test()
+and_test()
+or_test()
 
 datum = nil
 print('')
