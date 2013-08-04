@@ -385,6 +385,22 @@ function M.compound_proc.new(formals, body, env)
 end
 
 --------------------------------------------------------------------------------
+-- <port> atom
+--------------------------------------------------------------------------------
+M.port = {}
+M.port.mt = {}
+function M.port.mt.__tostring(t)
+    return tostring(t.value)
+end
+
+function M.port.new(value)
+    local t = {}
+    t.type = 'port'
+    t.value = value
+    return setmetatable(t, M.port.mt)
+end
+
+--------------------------------------------------------------------------------
 -- environment
 --
 -- Basically a linked list of linked lists. You check the tail linked list
@@ -519,6 +535,13 @@ whitespace_chars['\n'] = true
 whitespace_chars['\r'] = true
 local function IsWhitespace(ch)
     return whitespace_chars[ch]
+end
+
+local paren_chars = {}
+paren_chars['('] = true
+paren_chars[')'] = true
+local function IsParentheses(ch)
+    return paren_chars[ch]
 end
 
 local function IsSymbolInitial(ch)
@@ -712,7 +735,9 @@ function M.read(text)
             i = end_index + 1
         elseif ch == '+' or ch == '-' then
             -- peculiar symbol '+' and '-'
-            if (i + 1) > #text or IsWhitespace(text:sub(i + 1, i + 1)) then
+            if (i + 1) > #text
+                or IsWhitespace(text:sub(i + 1, i + 1))
+                or IsParentheses(text:sub(i + 1, i + 1)) then
                 local data = M.create_symbol(ch)
                 DatumInsert(datum, data, prefix_stack)
                 prefix_stack = {}
@@ -846,6 +871,7 @@ self_evaluating_types['boolean'] = true
 self_evaluating_types['character'] = true
 self_evaluating_types['string'] = true
 self_evaluating_types['number'] = true
+self_evaluating_types['vector'] = true
 function M.is_self_evaluating(expr)
     return self_evaluating_types[expr.type]
 end
@@ -1150,8 +1176,11 @@ function M.apply()
 end
 
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- primitive functions
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- helper function to inject procedures into the global environment
 M.primitive_symbols = {}
 local function register_primitive(symbol_name, fn)
     local symbol = M.create_symbol(symbol_name)
@@ -1159,6 +1188,103 @@ local function register_primitive(symbol_name, fn)
     M.global_environment:define_symbol(symbol, primitive_proc)
     M.primitive_symbols[symbol] = primitive_proc
 end
+
+--------------------------------------------------------------------------------
+-- type checking
+--------------------------------------------------------------------------------
+-- (boolean?)
+local function prim_is_boolean(args)
+    if args.car.type == 'boolean' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('boolean?', prim_is_boolean)
+
+-- (symbol?)
+local function prim_is_symbol(args)
+    if args.car.type == 'symbol' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('symbol?', prim_is_symbol)
+
+-- (char?)
+local function prim_is_char(args)
+    if args.car.type == 'character' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('char?', prim_is_char)
+
+-- (vector?)
+local function prim_is_vector(args)
+    if args.car.type == 'vector' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('vector?', prim_is_vector)
+
+-- (procedure?)
+local function prim_is_procedure(args)
+    if args.car.type == 'compound_proc' or args.car.type == 'primitive_proc' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('procedure?', prim_is_procedure)
+
+-- (pair?)
+local function prim_is_pair(args)
+    if args.car.type == 'pair' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('pair?', prim_is_pair)
+
+-- (number?)
+local function prim_is_number(args)
+    if args.car.type == 'number' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('number?', prim_is_number)
+
+-- (string?)
+local function prim_is_string(args)
+    if args.car.type == 'string' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('string?', prim_is_string)
+
+-- (port?)
+local function prim_is_port(args)
+    if args.car.type == 'port' then
+        return M.true_boolean
+    else
+        return M.false_boolean
+    end
+end
+register_primitive('port?', prim_is_port)
+
+--------------------------------------------------------------------------------
+-- TODO: classify primitives
+--------------------------------------------------------------------------------
 
 -- (eval)
 register_primitive('eval', M.eval)
